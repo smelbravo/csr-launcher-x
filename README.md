@@ -47,3 +47,16 @@
 3. Nas definições, seleciona o caminho para `csgo.exe` (Importante: seleciona o ficheiro `csgo.exe`, não a pasta csgo).
 4. Introduz parâmetros de arranque adicionais, se necessário.
 5. Clica no botão «Jogar».
+
+
+
+# CS:R Launcher ES
+> [!Important]
+> Este launcher dejará de recibir actualizaciones por el momento. Actualmente se está desarrollando activamente una nueva versión. Mantente atento a las novedades en nuestro servidor de Discord: https://discord.gg/pbXWCccD7d
+
+## Instructions
+1. Ve a [Releases](https://github.com/fareederx/csr-launcher-x/releases/latest) y descarga la versión más reciente disponible.
+2. Después de instalar el launcher, inicia sesión con tu cuenta de Discord.
+3. En la configuración, selecciona la ruta al archivo `csgo.exe` (Importante: selecciona el archivo `csgo.exe` directamente, no la carpeta csgo).
+4. Introduce parámetros de inicio adicionales si los necesitas.
+5. Haz clic en el botón Jugar.
