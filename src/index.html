@@ -17,18 +17,23 @@
         <span>CS:<span class="logo-red">R</span></span>
       </div>
       <div class="topbar-right">
-        <div class="topbar-user" id="topbar-user" style="display: none;">
-          <div style="position: relative;">
-            <img class="topbar-user-avatar" id="topbar-avatar" src="" alt="Avatar">
-            <div class="topbar-user-unverified" id="topbar-unverified" style="display: none;">
-              <i class="fa-solid fa-circle"></i>
+        <div class="topbar-user-menu" id="topbar-user-menu" style="display: none;">
+          <div class="topbar-user" id="topbar-user">
+            <div style="position: relative;">
+              <img class="topbar-user-avatar" id="topbar-avatar" src="" alt="Avatar">
+              <div class="topbar-user-unverified" id="topbar-unverified" style="display: none;">
+                <i class="fa-solid fa-circle"></i>
+              </div>
             </div>
+            <span class="topbar-user-name" id="topbar-name"></span>
           </div>
-          <span class="topbar-user-name" id="topbar-name"></span>
+          <div class="topbar-user-dropdown">
+            <button class="btn-logout" id="btn-logout" type="button">
+              <i class="fa-solid fa-right-from-bracket"></i>
+              <span data-i18n="btn_logout"></span>
+            </button>
+          </div>
         </div>
-        <button class="btn-logout" id="btn-logout" style="display: none;" data-i18n-title="btn_logout" title="Logout">
-          <i class="fa-solid fa-right-from-bracket"></i>
-        </button>
         <button class="btn-auth-login" id="btn-login" style="margin: 0; padding: 8px 16px;">
           <i class="fa-brands fa-discord"></i>
           <span data-i18n="btn_login"></span>
@@ -80,6 +85,30 @@
             </button>
             <span class="inventory-count" id="inventory-count"></span>
             <span class="inventory-coins" id="inventory-coins"></span>
+          </div>
+          <div class="inventory-toolbar" id="inventory-toolbar" style="display: none;">
+            <div class="inventory-toolbar-row">
+              <input type="search" id="inv-search" autocomplete="off" spellcheck="false"
+                data-i18n-placeholder="inv_search_placeholder" placeholder="Search weapon or skin…">
+              <div class="inventory-filters">
+                <select id="inv-rarity" title="Rarity"></select>
+                <select id="inv-wear" title="Wear">
+                  <option value="" data-i18n="inv_all_wear">All wear</option>
+                  <option value="FN" data-i18n="inv_wear_fn">Factory New</option>
+                  <option value="MW" data-i18n="inv_wear_mw">Minimal Wear</option>
+                  <option value="FT" data-i18n="inv_wear_ft">Field-Tested</option>
+                  <option value="WW" data-i18n="inv_wear_ww">Well-Worn</option>
+                  <option value="BS" data-i18n="inv_wear_bs">Battle-Scarred</option>
+                </select>
+                <select id="inv-float-sort" title="Float">
+                  <option value="" data-i18n="inv_float_order">Float order</option>
+                  <option value="asc" data-i18n="inv_float_asc">Float: Low → High</option>
+                  <option value="desc" data-i18n="inv_float_desc">Float: High → Low</option>
+                </select>
+                <button type="button" class="btn-secondary btn-inv-clear" id="inv-clear" data-i18n="inv_clear">Clear</button>
+              </div>
+            </div>
+            <div class="inventory-filter-count" id="inv-filter-count"></div>
           </div>
           <div class="inventory-loading" id="inventory-loading" style="display: none;">
             <i class="fa-solid fa-spinner fa-spin"></i>
@@ -184,6 +213,7 @@
     </div>
   </div>
 
+  <script src="js/inventory.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -30,6 +30,7 @@ async function init() {
     setupGameLaunch();
     setupInventory();
     setupAuth();
+    if (window.CSRInventory) CSRInventory.setupToolbar();
     loadSettings();
     checkAuthStatus();
     setupIPCListeners();
@@ -81,10 +82,17 @@ function tf(key, params) {
 }
 
 function applyTranslations() {
+  window._invTranslate = t;
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
     if (key && state.langData[key]) {
       el.textContent = state.langData[key];
+    }
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (key && state.langData[key]) {
+      el.setAttribute('placeholder', state.langData[key]);
     }
   });
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
@@ -93,6 +101,10 @@ function applyTranslations() {
       el.setAttribute('title', state.langData[key]);
     }
   });
+  if (window.CSRInventory) {
+    CSRInventory.refreshFilterLabels();
+    if (CSRInventory.getItems().length) CSRInventory.render();
+  }
 }
 
 let _langSelectorInitialized = false;
@@ -154,6 +166,7 @@ function cacheElements() {
 
   elements.btnLogin = id('btn-login');
   elements.btnLogout = id('btn-logout');
+  elements.topbarUserMenu = id('topbar-user-menu');
   elements.topbarUser = id('topbar-user');
   elements.topbarAvatar = id('topbar-avatar');
   elements.topbarName = id('topbar-name');
@@ -381,12 +394,11 @@ async function checkAuthStatus() {
 }
 
 function updateAuthUI(user) {
-  if (!elements.btnLogin || !elements.topbarUser) return;
+  if (!elements.btnLogin || !elements.topbarUserMenu) return;
 
   if (user) {
     elements.btnLogin.style.display = 'none';
-    elements.topbarUser.style.display = 'flex';
-    if (elements.btnLogout) elements.btnLogout.style.display = 'inline-flex';
+    elements.topbarUserMenu.style.display = 'block';
 
     if (elements.topbarName) {
       elements.topbarName.textContent = user.name || 'User';
@@ -401,8 +413,7 @@ function updateAuthUI(user) {
     }
   } else {
     elements.btnLogin.style.display = 'flex';
-    elements.topbarUser.style.display = 'none';
-    if (elements.btnLogout) elements.btnLogout.style.display = 'none';
+    elements.topbarUserMenu.style.display = 'none';
   }
 }
 
@@ -413,6 +424,7 @@ async function loadInventory() {
   if (loadingEl) loadingEl.style.display = 'flex';
   elements.inventoryGrid.innerHTML = '';
   elements.inventoryCount.textContent = tf('inventory_count', { count: 0 });
+  if (window.CSRInventory) CSRInventory.showToolbar(false);
 
   try {
     const result = await window.api.inventory.getCSR();
@@ -431,7 +443,6 @@ async function loadInventory() {
     }
 
     const items = result.items || [];
-    elements.inventoryCount.textContent = tf('inventory_count', { count: items.length });
 
     const userResult = await window.api.auth.getUser();
     if (!userResult.error && userResult.user) {
@@ -440,6 +451,7 @@ async function loadInventory() {
     }
 
     if (items.length === 0) {
+      elements.inventoryCount.textContent = tf('inventory_count', { count: 0 });
       elements.inventoryGrid.innerHTML = `
         <div class="empty-state">
           <i class="fa-solid fa-briefcase"></i>
@@ -449,10 +461,11 @@ async function loadInventory() {
       return;
     }
 
-    items.forEach(item => {
-      const el = createInventoryItem(item);
-      elements.inventoryGrid.appendChild(el);
-    });
+    if (window.CSRInventory) {
+      CSRInventory.setItems(items);
+      CSRInventory.showToolbar(true);
+      CSRInventory.render();
+    }
   } catch (e) {
     console.error('[Inventory] Load error:', e);
     if (loadingEl) loadingEl.style.display = 'none';
@@ -463,40 +476,6 @@ async function loadInventory() {
       </div>
     `;
   }
-}
-
-function createInventoryItem(item) {
-  const el = document.createElement('div');
-  const rarityClasses = [
-    '',
-    'item-rarity-covert',
-    'item-rarity-classified',
-    'item-rarity-restricted',
-    'item-rarity-mil-spec',
-    'item-rarity-industrial',
-    'item-rarity-consumer'
-  ];
-  const rarity = parseInt(item.rarity) || 7;
-  const rarityClass = rarity < rarityClasses.length && rarityClasses[rarity] ? rarityClasses[rarity] : 'item-rarity-consumer';
-  const weaponNames = ['Gloves', 'Knife', 'Rifle', 'Heavy', 'Pistol', 'SMG', 'Equipment', 'Music', 'Case', 'Agent', ''];
-  const itemTypeId = parseInt(item.item_type);
-  const weaponName = itemTypeId < weaponNames.length && weaponNames[itemTypeId] ? weaponNames[itemTypeId] : 'Item';
-
-  el.className = `inventory-item ${rarityClass}${item.stattrak ? ' stattrak' : ''}`;
-
-  const imgUrl = `https://cdn.csrestored.fun/skins/${item.item_id}.png`;
-  const floatText = item.float ? tf('float_label', { value: parseFloat(item.float).toFixed(4) }) : '';
-
-  el.innerHTML = `
-    <div class="item-icon">
-      <img src="${imgUrl}" alt="${item.name}" onerror="this.parentElement.innerHTML='<i class=\\'fa-solid fa-gun\\'></i>'">
-    </div>
-    <div class="item-name" title="${item.name}">${item.name}</div>
-    <div class="item-type">${weaponName}</div>
-    ${floatText ? `<div class="item-float">${floatText}</div>` : ''}
-  `;
-
-  return el;
 }
 
 function showInstallModal() {

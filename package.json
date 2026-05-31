@@ -1,6 +1,6 @@
 {
   "name": "csr-launcher",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CSR Launcher - Counter-Strike Game Launcher",
   "main": "main.js",
   "scripts": {
@@ -22,15 +22,39 @@
   "build": {
     "appId": "com.csr.launcher",
     "productName": "CSR Launcher",
+    "icon": "build/icon.ico",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "lang/**/*",
+      "assets/**/*",
+      "custom_lang/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "CSR Launcher"
+      "shortcutName": "CSR Launcher",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "installerLanguages": [
+        "pt_BR",
+        "en_US"
+      ],
+      "language": "1046"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -39,8 +63,7 @@
           ]
         }
       ],
-      "requestedExecutionLevel": "requireAdministrator",
-      "signAndEditExecutable": false
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "afterSign": null
   }

@@ -6,6 +6,14 @@ const express = require('express');
 const cors = require('cors');
 const langDir = path.join(__dirname, 'lang');
 
+function getAppIcon() {
+  const ico = path.join(__dirname, 'assets', 'icon.ico');
+  const png = path.join(__dirname, 'assets', 'icon.png');
+  if (process.platform === 'win32' && fs.existsSync(ico)) return ico;
+  if (fs.existsSync(png)) return png;
+  return undefined;
+}
+
 let customLangDir = null;
 
 function getCustomLangDir() {
@@ -173,6 +181,8 @@ function createWindow() {
     backgroundColor: '#0a0a0f',
     hasShadow: true,
     focusable: true,
+    icon: getAppIcon(),
+    title: 'CSR Launcher Beta',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -301,6 +311,9 @@ function launchCSR(settings, loginToken) {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.csr.launcher');
+  }
   ensureCustomLangFolder();
   createWindow();
 
@@ -525,6 +538,8 @@ ipcMain.handle('start-login', async () => {
     height: 600,
     parent: mainWindow,
     modal: true,
+    icon: getAppIcon(),
+    title: 'CSR Launcher Beta',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
