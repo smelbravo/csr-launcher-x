@@ -5,7 +5,9 @@
   "title": "CSR Launcher Beta",
 
   "nav_home": "Início",
+  "nav_leaderboard": "Leaderboard",
   "nav_inventory": "Inventário",
+  "nav_history": "Histórico",
   "nav_settings": "Definições",
 
   "btn_login": "Iniciar sessão com o Discord",
@@ -17,6 +19,8 @@
   "btn_launch": "Jogar",
 
   "page_inventory_title": "Inventário CS:Restored",
+  "page_leaderboard_title": "Leaderboard",
+  "page_history_title": "Histórico",
   "btn_refresh": "Atualizar",
   "inventory_count": "{count} itens",
   "inventory_loading": "A carregar inventário...",
@@ -40,6 +44,24 @@
   "inv_clear": "Limpar",
   "inv_showing": "A mostrar {visible} de {total} itens",
   "inv_no_results": "Nenhum item corresponde aos filtros",
+
+  "stats_loading": "A carregar…",
+  "stats_leaderboard_empty": "Sem dados no leaderboard. Inicia sessão com Discord e carrega outra vez.",
+  "stats_history_empty": "Sem histórico de partidas. Inicia sessão com Discord e carrega outra vez.",
+  "stats_match_error": "Não foi possível carregar os detalhes da partida.",
+  "stats_back_history": "Voltar ao Histórico",
+  "stats_download_demo": "Descarregar Demo",
+  "stats_map_unknown": "Desconhecido",
+  "stats_no_player_data": "Estatísticas dos jogadores indisponíveis para esta partida.",
+  "stats_col_rank": "Rank",
+  "stats_col_username": "Utilizador",
+  "stats_col_matches": "Partidas",
+  "stats_col_wins": "Vitórias",
+  "stats_col_elo": "ELO",
+  "stats_col_kda": "K/D/A",
+  "stats_col_kdr": "KDR",
+  "stats_col_score": "Score",
+  "stats_col_mvps": "MVPs",
 
   "page_settings_title": "Definições",
 

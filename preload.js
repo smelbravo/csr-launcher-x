@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('api', {
   csr: {
     getHistory: () => ipcRenderer.invoke('get-csr-history'),
     getLeaderboard: () => ipcRenderer.invoke('get-csr-leaderboard'),
+    getMatch: (id) => ipcRenderer.invoke('get-csr-match', id),
+    openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
     checkUpdates: () => ipcRenderer.invoke('check-csr-updates'),
     downloadFiles: (gameDir) => ipcRenderer.invoke('download-csr-files', gameDir),
     cancelDownload: () => ipcRenderer.send('cancel-download'),

@@ -5,7 +5,9 @@
   "title": "CSR Launcher Beta",
 
   "nav_home": "Главная",
+  "nav_leaderboard": "Leaderboard",
   "nav_inventory": "Инвентарь",
+  "nav_history": "История",
   "nav_settings": "Настройки",
 
   "btn_login": "Войти через Discord",
@@ -17,6 +19,8 @@
   "btn_launch": "Играть",
 
   "page_inventory_title": "Инвентарь CS:Restored",
+  "page_leaderboard_title": "Leaderboard",
+  "page_history_title": "История",
   "btn_refresh": "Обновить",
   "inventory_count": "{count} предметов",
   "inventory_loading": "Загрузка инвентаря...",
@@ -40,6 +44,24 @@
   "inv_clear": "Сбросить",
   "inv_showing": "Показано {visible} из {total}",
   "inv_no_results": "Нет предметов по фильтрам",
+
+  "stats_loading": "Загрузка…",
+  "stats_leaderboard_empty": "Нет данных leaderboard. Войдите через Discord и обновите.",
+  "stats_history_empty": "Нет истории матчей. Войдите через Discord и обновите.",
+  "stats_match_error": "Не удалось загрузить детали матча.",
+  "stats_back_history": "Назад к истории",
+  "stats_download_demo": "Скачать демо",
+  "stats_map_unknown": "Неизвестно",
+  "stats_no_player_data": "Статистика игроков недоступна для этого матча.",
+  "stats_col_rank": "Ранг",
+  "stats_col_username": "Игрок",
+  "stats_col_matches": "Матчи",
+  "stats_col_wins": "Победы",
+  "stats_col_elo": "ELO",
+  "stats_col_kda": "K/D/A",
+  "stats_col_kdr": "KDR",
+  "stats_col_score": "Score",
+  "stats_col_mvps": "MVPs",
 
   "page_settings_title": "Настройки",
 

@@ -5,7 +5,9 @@
   "title": "CSR Launcher Beta",
 
   "nav_home": "Home",
+  "nav_leaderboard": "Leaderboard",
   "nav_inventory": "Inventory",
+  "nav_history": "History",
   "nav_settings": "Settings",
 
   "btn_login": "Login via Discord",
@@ -17,6 +19,8 @@
   "btn_launch": "Play",
 
   "page_inventory_title": "CS:Restored Inventory",
+  "page_leaderboard_title": "Leaderboard",
+  "page_history_title": "History",
   "btn_refresh": "Refresh",
   "inventory_count": "{count} items",
   "inventory_loading": "Loading inventory...",
@@ -40,6 +44,24 @@
   "inv_clear": "Clear",
   "inv_showing": "Showing {visible} of {total} items",
   "inv_no_results": "No items match your filters",
+
+  "stats_loading": "Loading…",
+  "stats_leaderboard_empty": "No leaderboard data. Log in with Discord and try Refresh.",
+  "stats_history_empty": "No match history. Log in with Discord and try Refresh.",
+  "stats_match_error": "Could not load match details.",
+  "stats_back_history": "Back to History",
+  "stats_download_demo": "Download Demo",
+  "stats_map_unknown": "Unknown",
+  "stats_no_player_data": "Player stats not available for this match.",
+  "stats_col_rank": "Rank",
+  "stats_col_username": "Username",
+  "stats_col_matches": "Matches",
+  "stats_col_wins": "Wins",
+  "stats_col_elo": "ELO",
+  "stats_col_kda": "K/D/A",
+  "stats_col_kdr": "KDR",
+  "stats_col_score": "Score",
+  "stats_col_mvps": "MVPs",
 
   "page_settings_title": "Settings",
 

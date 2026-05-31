@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, session } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execSync } = require('child_process');
@@ -947,49 +947,56 @@ ipcMain.handle('get-csr-user', async () => {
 
 ipcMain.handle('get-csr-history', async () => {
   try {
-    const { net } = require('electron');
-    const sess = session.defaultSession;
-    const cookies = await sess.cookies.get({ domain: '.csrestored.fun' });
+    const cookies = await getCsrCookies();
+    const matches = [];
 
-    const endpoints = [
-      'https://api.csrestored.fun/history',
-      'https://api.csrestored.fun/users/@me/history',
-      'https://api.csrestored.fun/matches',
-      'https://api.csrestored.fun/matches/history',
-      'https://api.csrestored.fun/users/history'
-    ];
+    for (let page = 0; page < 100; page++) {
+      const result = await fetchCsrApi(`${API_BASE_URL}/history/user/@me/${page}`, cookies);
+      if (result.status === 401) {
+        return { error: false, matches: [], unauthorized: true };
+      }
+      if (result.status === 404 || !result.ok) break;
 
-    for (const endpoint of endpoints) {
-      const result = await makeApiRequest(endpoint, cookies);
-      if (!result.error && result.matches && result.matches.length > 0) {
-        return result;
-      }
-      if (!result.error && result.matches) {
-        return result;
-      }
+      const batch = Array.isArray(result.data) ? result.data : extractApiArray(result.data, ['matches', 'history', 'data']);
+      if (!batch.length) break;
+
+      matches.push(...batch);
+      if (batch.length < 10) break;
     }
 
-    return { error: false, matches: [] };
+    return { error: false, matches };
   } catch (e) {
     return { error: true, matches: [], message: e.message };
   }
 });
 
-function makeApiRequest(url, cookies) {
+async function getCsrCookies() {
+  const sess = session.defaultSession;
+  let cookies = await sess.cookies.get({ domain: '.csrestored.fun' });
+  if (!cookies.length) cookies = await sess.cookies.get({});
+  return cookies;
+}
+
+function extractApiArray(data, keys = []) {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return [];
+  for (const k of keys) {
+    if (Array.isArray(data[k])) return data[k];
+  }
+  return [];
+}
+
+function fetchCsrApi(url, cookies) {
   return new Promise((resolve) => {
     const { net } = require('electron');
-    const request = net.request({
-      method: 'GET',
-      url
-    });
+    const request = net.request({ method: 'GET', url });
 
     request.setHeader('Origin', 'https://csrestored.fun');
     request.setHeader('Referer', 'https://csrestored.fun/');
     request.setHeader('Accept', 'application/json');
 
     if (cookies.length > 0) {
-      const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-      request.setHeader('Cookie', cookieHeader);
+      request.setHeader('Cookie', cookies.map(c => `${c.name}=${c.value}`).join('; '));
     }
 
     request.on('response', (response) => {
@@ -997,42 +1004,86 @@ function makeApiRequest(url, cookies) {
       response.on('data', (chunk) => { data += chunk; });
       response.on('end', () => {
         try {
-          const parsed = JSON.parse(data);
-          if (response.statusCode === 200) {
-            const matches = Array.isArray(parsed) ? parsed : (parsed.data || parsed.matches || []);
-            resolve({ error: false, matches });
-          } else {
-            resolve({ error: true, matches: [] });
-          }
+          const parsed = data ? JSON.parse(data) : null;
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode,
+            data: parsed
+          });
         } catch (e) {
-          resolve({ error: true, matches: [] });
+          resolve({ ok: false, status: response.statusCode, data: null, raw: data });
         }
       });
     });
 
-    request.on('error', () => {
-      resolve({ error: true, matches: [] });
+    request.on('error', (err) => {
+      resolve({ ok: false, error: err.message, data: null });
     });
 
     request.end();
   });
 }
 
+function makeApiRequest(url, cookies) {
+  return fetchCsrApi(url, cookies).then((result) => ({
+    error: !result.ok,
+    matches: result.ok ? extractApiArray(result.data, ['data', 'matches', 'history', 'results']) : []
+  }));
+}
+
 ipcMain.handle('get-csr-leaderboard', async () => {
   try {
-    if (mainWindow && mainWindow.webContents) {
-      const result = await mainWindow.webContents.executeJavaScript(`
-        fetch('https://api.csrestored.fun/leaderboard', {
-          credentials: 'include',
-          headers: { 'Accept': 'application/json' }
-        }).then(r => r.json()).catch(e => ({ error: true, message: e.message }))
-      `);
-      if (result.error) return { error: true, players: [] };
-      return { error: false, players: Array.isArray(result) ? result : [] };
+    const cookies = await getCsrCookies();
+    const players = [];
+
+    for (let page = 0; page < 50; page++) {
+      const result = await fetchCsrApi(`${API_BASE_URL}/users/top/${page}`, cookies);
+      if (result.status === 404 || !result.ok) break;
+
+      const batch = Array.isArray(result.data) ? result.data : extractApiArray(result.data, ['players', 'data']);
+      if (!batch.length) break;
+
+      players.push(...batch);
     }
-    return { error: true, players: [], message: 'No main window' };
+
+    return { error: false, players };
   } catch (e) {
     return { error: true, players: [], message: e.message };
+  }
+});
+
+ipcMain.handle('get-csr-match', async (event, matchId) => {
+  try {
+    const cookies = await getCsrCookies();
+    const id = String(matchId ?? '').replace(/\D/g, '');
+    if (!id) return { error: true, match: null, message: 'Invalid match id' };
+
+    const endpoints = [
+      `${API_BASE_URL}/history/match/${id}`,
+      `${API_BASE_URL}/matches/${id}`,
+      `${API_BASE_URL}/match/${id}`
+    ];
+
+    for (const endpoint of endpoints) {
+      const result = await fetchCsrApi(endpoint, cookies);
+      if (result.ok && result.data) {
+        return { error: false, match: result.data };
+      }
+    }
+
+    return { error: true, match: null, message: 'Match not found' };
+  } catch (e) {
+    return { error: true, match: null, message: e.message };
+  }
+});
+
+ipcMain.handle('open-external-url', async (event, url) => {
+  if (!url || typeof url !== 'string') return { success: false };
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
   }
 });
 

@@ -19,9 +19,28 @@ function id(name) {
   return el;
 }
 
+/** Keep sidebar + pages in the correct DOM tree (fixes broken HTML in older builds). */
+function ensureLayoutStructure() {
+  const mainContent = document.querySelector('.main-content');
+  const sidebar = document.querySelector('.sidebar');
+  const content = document.querySelector('main.content');
+  if (!mainContent || !sidebar || !content) return;
+
+  if (sidebar.parentElement === mainContent && sidebar !== mainContent.firstElementChild) {
+    mainContent.insertBefore(sidebar, mainContent.firstElementChild);
+  }
+
+  document.querySelectorAll('.page').forEach((page) => {
+    if (!content.contains(page)) {
+      content.appendChild(page);
+    }
+  });
+}
+
 async function init() {
   try {
     console.log('[App] Initializing...');
+    ensureLayoutStructure();
     cacheElements();
     await loadLanguage();
     setupNavigation();
@@ -31,6 +50,7 @@ async function init() {
     setupInventory();
     setupAuth();
     if (window.CSRInventory) CSRInventory.setupToolbar();
+    if (window.CSRPlayStats) CSRPlayStats.setup();
     loadSettings();
     checkAuthStatus();
     setupIPCListeners();
@@ -105,6 +125,7 @@ function applyTranslations() {
     CSRInventory.refreshFilterLabels();
     if (CSRInventory.getItems().length) CSRInventory.render();
   }
+  window._playTranslate = t;
 }
 
 let _langSelectorInitialized = false;
@@ -209,8 +230,10 @@ function setupNavigation() {
 }
 
 function navigateToPage(page) {
+  ensureLayoutStructure();
+
   elements.navItems.forEach(item => item.classList.remove('active'));
-  elements.pages.forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
   const targetNav = document.querySelector(`[data-page="${page}"]`);
   if (targetNav) targetNav.classList.add('active');
@@ -222,6 +245,10 @@ function navigateToPage(page) {
 
   if (page === 'inventory') {
     loadInventory();
+  } else if (page === 'leaderboard' && window.CSRPlayStats) {
+    CSRPlayStats.loadLeaderboard();
+  } else if (page === 'history' && window.CSRPlayStats) {
+    CSRPlayStats.loadHistory();
   }
 }
 
@@ -377,6 +404,7 @@ function setupAuth() {
       const result = await window.api.auth.logout();
       if (result.success) {
         updateAuthUI(null);
+        if (window.CSRPlayStats) CSRPlayStats.invalidate();
       }
     });
   }
