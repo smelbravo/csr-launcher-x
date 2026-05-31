@@ -78,7 +78,7 @@ Stable releases: [GitHub Releases](https://github.com/smelbravo/csr-launcher-x/r
 
 # CS:R Launcher PT
 > [!Important]
-> Esta é uma **versão modificada** do launcher original ([fareederx/csr-launcher-x](https://github.com/fareederx/csr-launcher-x)). É mantida ativamente neste repositório ([smelbravo/csr-launcher-x](https://github.com/smelbravo/csr-launcher-x)) com funcionalidades e correções extra. O developer original está ciente deste fork e não se opôs. Projeto original: fareederx/csr-launcher-x.
+> Esta é uma **versão modificada** do launcher original [CSR Launcher](https://github.com/fareederx/csr-launcher-x). É mantida ativamente neste repositório ([smelbravo/csr-launcher-x](https://github.com/smelbravo/csr-launcher-x)) com funcionalidades e correções extra. O developer original está ciente deste fork e não se opôs. Projeto original: fareederx/csr-launcher-x.
 
 ## Instruções
 1. Vai a [Releases](https://github.com/fareederx/csr-launcher-x/releases/latest) e descarrega a versão mais recente disponível.
