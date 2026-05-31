@@ -981,7 +981,12 @@ body {
 }
 
 .btn-logout {
-  padding: 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   background: transparent;
   border: 1px solid var(--border-color);
   border-radius: 6px;

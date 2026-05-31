@@ -722,6 +722,10 @@ ipcMain.handle('logout', async () => {
       fs.unlinkSync(cookiePath);
     }
 
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('auth-status', { loggedIn: false });
+    }
+
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };

@@ -153,6 +153,7 @@ function cacheElements() {
   elements.btnLaunch = id('btn-launch-game');
 
   elements.btnLogin = id('btn-login');
+  elements.btnLogout = id('btn-logout');
   elements.topbarUser = id('topbar-user');
   elements.topbarAvatar = id('topbar-avatar');
   elements.topbarName = id('topbar-name');
@@ -385,6 +386,7 @@ function updateAuthUI(user) {
   if (user) {
     elements.btnLogin.style.display = 'none';
     elements.topbarUser.style.display = 'flex';
+    if (elements.btnLogout) elements.btnLogout.style.display = 'inline-flex';
 
     if (elements.topbarName) {
       elements.topbarName.textContent = user.name || 'User';
@@ -400,6 +402,7 @@ function updateAuthUI(user) {
   } else {
     elements.btnLogin.style.display = 'flex';
     elements.topbarUser.style.display = 'none';
+    if (elements.btnLogout) elements.btnLogout.style.display = 'none';
   }
 }
 
