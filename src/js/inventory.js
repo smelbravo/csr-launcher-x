@@ -12,6 +12,14 @@ const INVENTORY_RARITY = {
 
 const WEAPON_TYPES = ['Gloves', 'Knife', 'Rifle', 'Heavy', 'Pistol', 'SMG', 'Equipment', 'Music', 'Case', 'Agent', ''];
 
+function getItemTypeName(item) {
+  const typeId = parseInt(item.item_type, 10);
+  if (typeId >= 0 && typeId < WEAPON_TYPES.length && WEAPON_TYPES[typeId]) {
+    return WEAPON_TYPES[typeId];
+  }
+  return 'Item';
+}
+
 let _items = [];
 let _filterTimer = null;
 
@@ -84,6 +92,7 @@ function getItemSearchText(item) {
 function readInventoryFilters() {
   return {
     q: (document.getElementById('inv-search')?.value || '').trim().toLowerCase(),
+    type: document.getElementById('inv-type')?.value || '',
     rarity: document.getElementById('inv-rarity')?.value || '',
     wear: document.getElementById('inv-wear')?.value || '',
     floatSort: document.getElementById('inv-float-sort')?.value || ''
@@ -96,6 +105,7 @@ function itemPassesFilters(item, f) {
     const terms = f.q.split(/\s+/).filter(Boolean);
     if (!terms.every(t => hay.includes(t))) return false;
   }
+  if (f.type !== '' && String(parseInt(item.item_type, 10)) !== f.type) return false;
   if (f.rarity !== '' && String(item.rarity) !== f.rarity) return false;
   if (f.wear) {
     const w = item.float != null ? getCondition(item.float) : '';
@@ -120,10 +130,7 @@ function sortFilteredItems(items, f) {
 function createInventoryCard(item) {
   const el = document.createElement('div');
   const rInfo = getRarityInfo(item.rarity);
-  const typeId = parseInt(item.item_type, 10);
-  const weaponName = typeId >= 0 && typeId < WEAPON_TYPES.length && WEAPON_TYPES[typeId]
-    ? WEAPON_TYPES[typeId]
-    : 'Item';
+  const weaponName = getItemTypeName(item);
 
   el.className = `inventory-item ${rInfo.cls}${item.stattrak ? ' stattrak' : ''}`;
   el.dataset.rarity = String(item.rarity);
@@ -191,10 +198,12 @@ function renderInventoryGrid() {
 
 function clearInventoryFilters() {
   const search = document.getElementById('inv-search');
+  const type = document.getElementById('inv-type');
   const rarity = document.getElementById('inv-rarity');
   const wear = document.getElementById('inv-wear');
   const floatSort = document.getElementById('inv-float-sort');
   if (search) search.value = '';
+  if (type) type.value = '';
   if (rarity) rarity.value = '';
   if (wear) wear.value = '';
   if (floatSort) floatSort.value = '';
@@ -204,6 +213,29 @@ function clearInventoryFilters() {
 function scheduleInventoryFilters() {
   clearTimeout(_filterTimer);
   _filterTimer = setTimeout(renderInventoryGrid, 120);
+}
+
+function populateTypeFilterOptions() {
+  const sel = document.getElementById('inv-type');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = `<option value="">${invT('inv_all_types')}</option>`;
+
+  const typesInInventory = new Set(
+    _items.map(item => parseInt(item.item_type, 10)).filter(n => Number.isFinite(n))
+  );
+
+  WEAPON_TYPES.forEach((name, id) => {
+    if (!name || !typesInInventory.has(id)) return;
+    const opt = document.createElement('option');
+    opt.value = String(id);
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+
+  if (current && [...sel.options].some(o => o.value === current)) {
+    sel.value = current;
+  }
 }
 
 function populateRarityFilterOptions() {
@@ -224,18 +256,20 @@ function populateRarityFilterOptions() {
 
 function setupInventoryToolbar() {
   const search = document.getElementById('inv-search');
+  const type = document.getElementById('inv-type');
   const rarity = document.getElementById('inv-rarity');
   const wear = document.getElementById('inv-wear');
   const floatSort = document.getElementById('inv-float-sort');
   const clearBtn = document.getElementById('inv-clear');
 
+  populateTypeFilterOptions();
   populateRarityFilterOptions();
 
   if (search && !search.dataset.bound) {
     search.dataset.bound = '1';
     search.addEventListener('input', scheduleInventoryFilters);
   }
-  [rarity, wear, floatSort].forEach(el => {
+  [type, rarity, wear, floatSort].forEach(el => {
     if (el && !el.dataset.bound) {
       el.dataset.bound = '1';
       el.addEventListener('change', renderInventoryGrid);
@@ -250,6 +284,7 @@ function setupInventoryToolbar() {
 function setInventoryItems(rawItems) {
   _items = (rawItems || []).map(normalizeItem).filter(Boolean);
   _items.sort((a, b) => a.rarity - b.rarity);
+  populateTypeFilterOptions();
 }
 
 function showInventoryToolbar(show) {
@@ -261,7 +296,10 @@ window.CSRInventory = {
   setItems: setInventoryItems,
   render: renderInventoryGrid,
   setupToolbar: setupInventoryToolbar,
-  refreshFilterLabels: populateRarityFilterOptions,
+  refreshFilterLabels: () => {
+    populateTypeFilterOptions();
+    populateRarityFilterOptions();
+  },
   showToolbar: showInventoryToolbar,
   getItems: () => _items
 };

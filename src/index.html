@@ -91,6 +91,7 @@
               <input type="search" id="inv-search" autocomplete="off" spellcheck="false"
                 data-i18n-placeholder="inv_search_placeholder" placeholder="Search weapon or skin…">
               <div class="inventory-filters">
+                <select id="inv-type" title="Type"></select>
                 <select id="inv-rarity" title="Rarity"></select>
                 <select id="inv-wear" title="Wear">
                   <option value="" data-i18n="inv_all_wear">All wear</option>
@@ -179,6 +180,7 @@
     <!-- Bottom Bar -->
     <footer class="bottombar">
       <div class="bottombar-actions">
+        <p class="launch-hint" id="launch-hint" style="display: none;" data-i18n="launch_close_hint"></p>
         <button class="btn-play" id="btn-launch-game">
           <i class="fa-solid fa-play"></i>
           <span class="play-text" data-i18n="btn_launch"></span>

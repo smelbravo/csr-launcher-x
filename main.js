@@ -289,11 +289,16 @@ function launchCSR(settings, loginToken) {
 
     csrProcess = spawn(csrExe, launchArgs, {
       cwd: gameDir,
-      stdio: 'ignore'
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
     });
+
+    csrProcess.unref();
 
     csrProcess.on('exit', () => {
       console.log('[Launch] CSR process exited');
+      csrProcess = null;
     });
 
     csrProcess.on('error', (err) => {
@@ -329,10 +334,7 @@ app.on('window-all-closed', () => {
     gsisServer.close();
     gsisServer = null;
   }
-  if (csrProcess) {
-    try { csrProcess.kill(); } catch (e) { }
-    csrProcess = null;
-  }
+  // Game runs detached — closing the launcher must not kill csr.exe
   app.quit();
 });
 

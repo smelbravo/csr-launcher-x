@@ -382,9 +382,19 @@ body {
 
 .bottombar-actions {
   display: flex;
-  justify-items: end;
+  justify-content: flex-end;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  width: 100%;
+}
+
+.launch-hint {
+  margin: 0;
+  margin-right: auto;
+  max-width: 420px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* Play Button - Figma style: red gradient, rounded 18px */
@@ -710,6 +720,10 @@ body {
   font-size: 0.8125rem;
   cursor: pointer;
   outline: none;
+}
+
+#inv-type {
+  min-width: 130px;
 }
 
 #inv-rarity {

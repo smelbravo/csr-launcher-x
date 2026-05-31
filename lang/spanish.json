@@ -27,6 +27,7 @@
   "seed_label": "Semilla: {value}",
   "inv_search_placeholder": "Buscar arma o skin…",
   "inv_all_rarities": "Todas las raridades",
+  "inv_all_types": "Todos los tipos",
   "inv_all_wear": "Todo el desgaste",
   "inv_wear_fn": "Factory New",
   "inv_wear_mw": "Minimal Wear",
@@ -66,6 +67,7 @@
 
   "launch_checking": "Comprobando archivos...",
   "launch_launching": "Iniciando...",
+  "launch_close_hint": "Juego iniciado — puedes cerrar el launcher mientras juegas.",
   "launch_no_dir": "Configura la carpeta del juego en Ajustes.",
   "launch_not_logged_in": "Necesitas iniciar sesión primero.",
 

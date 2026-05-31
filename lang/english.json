@@ -27,6 +27,7 @@
   "seed_label": "Seed: {value}",
   "inv_search_placeholder": "Search weapon or skin…",
   "inv_all_rarities": "All rarities",
+  "inv_all_types": "All types",
   "inv_all_wear": "All wear",
   "inv_wear_fn": "Factory New",
   "inv_wear_mw": "Minimal Wear",
@@ -66,6 +67,7 @@
 
   "launch_checking": "Checking files...",
   "launch_launching": "Launching...",
+  "launch_close_hint": "Game started — you can close the launcher while playing.",
   "launch_no_dir": "Set game folder in Settings.",
   "launch_not_logged_in": "You need to log in first.",
 

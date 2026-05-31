@@ -352,7 +352,10 @@ function setupGameLaunch() {
       if (playText) playText.textContent = t('btn_launch');
       if (playIcon) playIcon.className = 'fa-solid fa-play';
       elements.btnLaunch.disabled = false;
-    }, 5000);
+    }, 3000);
+
+    const hint = id('launch-hint');
+    if (hint) hint.style.display = 'block';
   });
 }
 

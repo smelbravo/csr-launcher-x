@@ -27,6 +27,7 @@
   "seed_label": "Сид: {value}",
   "inv_search_placeholder": "Поиск оружия или скина…",
   "inv_all_rarities": "Все редкости",
+  "inv_all_types": "Все типы",
   "inv_all_wear": "Любой износ",
   "inv_wear_fn": "Factory New",
   "inv_wear_mw": "Minimal Wear",
@@ -66,6 +67,7 @@
 
   "launch_checking": "Проверка файлов...",
   "launch_launching": "Запуск...",
+  "launch_close_hint": "Игра запущена — можно закрыть лаунчер.",
   "launch_no_dir": "Укажите папку с игрой в настройках.",
   "launch_not_logged_in": "Необходимо войти в аккаунт.",
 
