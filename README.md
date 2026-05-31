@@ -1,6 +1,45 @@
 # CS:R Launcher EN
+
 > [!Important]
 > This launcher will no longer receive updates for the time being. A new version is actively under development. Stay tuned for news on our Discord server: https://discord.gg/pbXWCccD7d
+
+## About
+
+**CSR Launcher** is a desktop companion app for [Counter-Strike: Restored](https://csrestored.fun) (CS:R). It handles Discord login, game updates, and launching `csr.exe` from your local CS:GO / CS:R folder — so you can jump into the game without opening the website every time.
+
+Built with **Electron**, it runs on Windows and provides a lightweight UI for everyday CS:R use.
+
+### What it does
+
+| Area | Description |
+|------|-------------|
+| **Play** | Checks for missing or outdated game files, downloads updates if needed, then launches CS:R with your saved launch arguments and Discord session token. After launch you can **close the launcher** — the game keeps running. |
+| **Inventory** | Shows your CS:R inventory after Discord login: skin image, name, type (Pistol, Rifle, SMG, Knife, Case, etc.), **float** with wear color (FN/MW/FT/WW/BS), **seed** (`#pattern`), and **coins**. Search and filter by name, item type, rarity, wear, and float sort — same idea as the [CSR Inventory Helper](https://github.com/smelbravo/CS-Restored-Inventory-Helper) extension filters. |
+| **Settings** | Set the path to your game folder (`csgo.exe` / CS:R directory), custom launch args (e.g. `-novid -console -tickrate 128`), and UI language. |
+| **Account** | Log in with Discord; hover your username to **log out**. Unverified accounts are marked in the top bar. |
+
+### Languages
+
+English, Portuguese (pt-PT), German, Spanish, and Russian — selectable in Settings. Custom language packs can be dropped into the `custom_lang/` folder next to the installed app.
+
+### Requirements
+
+- **Windows** (x64)
+- A valid **Discord** account linked to CS:R
+- CS:R / CS:GO files installed locally (`csr.exe` in your game folder)
+- **Administrator** rights (required by the installer and game launch flow)
+
+### Build from source
+
+```bash
+npm install
+npm start          # dev mode
+npm run build:win  # Windows installer → dist/CSR Launcher Setup x.x.x.exe
+```
+
+The NSIS installer lets you **choose the install folder** (not one-click only).
+
+Stable releases: [GitHub Releases](https://github.com/smelbravo/csr-launcher-x/releases)
 
 ## Instructions
 1. Go to [Releases](https://github.com/fareederx/csr-launcher-x/releases/latest) and download the latest available version.
