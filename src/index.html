@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:3000 https://api.csrestored.fun https://cdn.csrestored.fun;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:3000 https://api.csrestored.fun https://cdn.csrestored.fun https://socket.csrestored.fun wss://socket.csrestored.fun;">
   <title>CSR Launcher</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -49,6 +49,10 @@
             <i class="fa-solid fa-house"></i>
             <span data-i18n="nav_home"></span>
           </a>
+          <a href="#" class="nav-item" data-page="matchmaking">
+            <i class="fa-solid fa-crosshairs"></i>
+            <span data-i18n="nav_matchmaking"></span>
+          </a>
           <a href="#" class="nav-item" data-page="leaderboard">
             <i class="fa-solid fa-chart-column"></i>
             <span data-i18n="nav_leaderboard"></span>
@@ -77,6 +81,72 @@
             <div class="hero-content">
               <h1 data-i18n="hero_title"></h1>
               <p data-i18n="hero_subtitle"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Matchmaking Page -->
+        <div class="page" id="page-matchmaking">
+          <div class="mm-page">
+            <div class="stats-loading" id="mm-loading">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <p data-i18n="mm_connecting"></p>
+            </div>
+            <div id="mm-error" class="mm-error" style="display: none;"></div>
+            <div id="mm-content" style="display: none;">
+              <div class="mm-team-header">
+                <h2 class="mm-group-name" id="mm-group-name">—</h2>
+                <button type="button" class="btn-secondary mm-leave-btn" id="mm-leave-group">
+                  <span data-i18n="mm_leave_group"></span>
+                </button>
+              </div>
+
+              <div class="mm-team-slots" id="mm-team-slots"></div>
+
+              <div class="mm-queue-panel">
+                <div class="mm-elo-badge" id="mm-elo-badge">— ELO</div>
+                <button type="button" class="btn-play mm-queue-btn" id="mm-queue-btn" disabled>
+                  <span data-i18n="mm_join_queue"></span>
+                </button>
+                <p class="mm-stats-line" id="mm-stats-line"></p>
+                <p class="mm-promo">🔥 2x COINS WEEK</p>
+              </div>
+
+              <div class="mm-options card">
+                <div class="mm-options-header">
+                  <h3 data-i18n="mm_options"></h3>
+                  <span class="mm-queue-wait" id="mm-queue-wait"></span>
+                </div>
+                <div class="mm-options-grid">
+                  <div class="mm-options-col">
+                    <h4 data-i18n="mm_game_mode"></h4>
+                    <div class="mm-option-list" id="mm-mode-list"></div>
+                  </div>
+                  <div class="mm-options-col">
+                    <h4 data-i18n="mm_server_location"></h4>
+                    <div class="mm-option-list" id="mm-region-list"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mm-live card">
+                <h3 data-i18n="mm_live_matches"></h3>
+                <div class="stats-table-wrap">
+                  <table class="stats-table mm-live-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="mm_col_mode"></th>
+                        <th data-i18n="mm_col_map"></th>
+                        <th colspan="2" data-i18n="mm_col_score"></th>
+                        <th data-i18n="mm_col_duration"></th>
+                        <th data-i18n="mm_col_region"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="mm-live-body"></tbody>
+                  </table>
+                </div>
+                <p class="mm-live-empty" id="mm-live-empty" data-i18n="mm_no_live_matches"></p>
+              </div>
             </div>
           </div>
         </div>
@@ -282,6 +352,7 @@
 
   <script src="js/inventory.js"></script>
   <script src="js/play.js"></script>
+  <script src="js/matchmaking.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -41,6 +41,18 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('auth-status', (event, data) => callback(data));
     }
   },
+  matchmaking: {
+    start: () => ipcRenderer.invoke('mm-start'),
+    stop: () => ipcRenderer.invoke('mm-stop'),
+    getState: () => ipcRenderer.invoke('mm-get-state'),
+    setQueueType: (type) => ipcRenderer.invoke('mm-set-queue-type', type),
+    joinQueue: () => ipcRenderer.invoke('mm-join-queue'),
+    leaveQueue: () => ipcRenderer.invoke('mm-leave-queue'),
+    leaveGroup: () => ipcRenderer.invoke('mm-leave-group'),
+    onUpdate: (callback) => {
+      ipcRenderer.on('mm-state', (event, data) => callback(data));
+    }
+  },
   csr: {
     getHistory: () => ipcRenderer.invoke('get-csr-history'),
     getLeaderboard: () => ipcRenderer.invoke('get-csr-leaderboard'),

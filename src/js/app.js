@@ -51,6 +51,7 @@ async function init() {
     setupAuth();
     if (window.CSRInventory) CSRInventory.setupToolbar();
     if (window.CSRPlayStats) CSRPlayStats.setup();
+    if (window.CSRMatchmaking) CSRMatchmaking.setup();
     loadSettings();
     checkAuthStatus();
     setupIPCListeners();
@@ -242,6 +243,12 @@ function navigateToPage(page) {
   if (targetPage) targetPage.classList.add('active');
 
   state.currentPage = page;
+
+  if (page === 'matchmaking' && window.CSRMatchmaking) {
+    CSRMatchmaking.start();
+  } else if (window.CSRMatchmaking) {
+    CSRMatchmaking.stop();
+  }
 
   if (page === 'inventory') {
     loadInventory();

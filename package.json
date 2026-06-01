@@ -17,7 +17,8 @@
   "dependencies": {
     "cors": "^2.8.5",
     "discord-rpc": "^4.0.1",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "phoenix": "^1.8.7"
   },
   "build": {
     "appId": "com.csr.launcher",
@@ -26,10 +27,12 @@
     "files": [
       "main.js",
       "preload.js",
+      "matchmaking-ws.js",
       "src/**/*",
       "lang/**/*",
       "assets/**/*",
       "custom_lang/**/*",
+      "node_modules/phoenix/**/*",
       "package.json"
     ],
     "directories": {

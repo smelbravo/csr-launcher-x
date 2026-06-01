@@ -34,6 +34,15 @@ function getCustomLangDir() {
 let mainWindow;
 let gsisServer = null;
 let csrProcess = null;
+let mmService = null;
+
+const { MatchmakingService } = require('./matchmaking-ws');
+
+function sendMatchmakingState(state) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('mm-state', state);
+  }
+}
 
 let loginWindow = null;
 let downloadCancelled = false;
@@ -1075,6 +1084,62 @@ ipcMain.handle('get-csr-match', async (event, matchId) => {
   } catch (e) {
     return { error: true, match: null, message: e.message };
   }
+});
+
+ipcMain.handle('mm-start', async () => {
+  try {
+    const cookies = await getCsrCookies();
+    const wsCookie = cookies.find((c) => c.name === 'jwt_websocket_session');
+    if (!wsCookie?.value) {
+      return {
+        ok: false,
+        error: 'Missing WebSocket session. Log in via Discord (open csrestored.fun once in the browser flow).'
+      };
+    }
+
+    const userResult = await fetchCsrApi(`${API_BASE_URL}/users/@me`, cookies);
+    if (!userResult.ok || !userResult.data?.id) {
+      return { ok: false, error: 'Could not load your CS:R profile. Log in via Discord.' };
+    }
+
+    if (!mmService) mmService = new MatchmakingService(sendMatchmakingState);
+    return await mmService.connect(wsCookie.value, userResult.data.id);
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('mm-stop', async () => {
+  if (mmService) mmService.disconnect();
+  return { ok: true };
+});
+
+ipcMain.handle('mm-get-state', async () => {
+  return mmService ? mmService.getPublicState() : { connected: false };
+});
+
+ipcMain.handle('mm-set-queue-type', async (event, type) => {
+  if (!mmService) return { ok: false };
+  mmService.setQueueType(type);
+  return { ok: true };
+});
+
+ipcMain.handle('mm-join-queue', async () => {
+  if (!mmService) return { ok: false, error: 'Not connected' };
+  return mmService.joinQueue();
+});
+
+ipcMain.handle('mm-leave-queue', async () => {
+  if (!mmService) return { ok: false };
+  mmService.leaveQueue();
+  return { ok: true };
+});
+
+ipcMain.handle('mm-leave-group', async () => {
+  if (!mmService) return { ok: false };
+  mmService.leaveGroup();
+  await mmService.joinOrCreateGroup();
+  return { ok: true };
 });
 
 ipcMain.handle('open-external-url', async (event, url) => {

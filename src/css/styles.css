@@ -1542,3 +1542,256 @@ body {
     gap: 8px;
   }
 }
+
+/* ── Matchmaking ── */
+.mm-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 8px 0 24px;
+}
+
+.mm-error {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.mm-team-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.mm-group-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.mm-leave-btn {
+  padding: 8px 16px;
+}
+
+.mm-team-slots {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.mm-team-slot {
+  width: 140px;
+  height: 200px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  transition: var(--transition-fast);
+}
+
+.mm-team-slot-filled {
+  border-color: var(--border-hover);
+}
+
+.mm-team-slot-empty {
+  color: var(--text-muted);
+  font-size: 2rem;
+}
+
+.mm-slot-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-secondary);
+}
+
+.mm-slot-name {
+  font-weight: 600;
+  font-size: 13px;
+  text-align: center;
+  word-break: break-word;
+}
+
+.mm-slot-elo {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.mm-queue-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.mm-elo-badge {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mm-queue-btn {
+  min-width: 220px;
+  padding: 14px 32px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.mm-queue-btn.in-queue {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.mm-stats-line {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.mm-promo {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.mm-options {
+  margin-bottom: 20px;
+}
+
+.mm-options-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.mm-options-header h3 {
+  font-size: 1.1rem;
+}
+
+.mm-queue-wait {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.mm-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.mm-options-col h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.mm-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mm-option-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition-fast);
+}
+
+.mm-option-row:hover {
+  border-color: var(--border-hover);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mm-option-row.active {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.mm-option-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.mm-option-icon.mm-flag {
+  border-radius: 4px;
+}
+
+.mm-option-label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.mm-option-online {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mm-option-online.online {
+  color: var(--success);
+}
+
+.mm-option-online .fa-circle {
+  font-size: 8px;
+}
+
+.mm-live h3 {
+  margin-bottom: 12px;
+}
+
+.mm-live-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px 12px;
+  font-size: 14px;
+}
+
+.mm-live-score {
+  text-align: center;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .mm-options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mm-team-slot {
+    width: 110px;
+    height: 160px;
+  }
+}
