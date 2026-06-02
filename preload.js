@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('api', {
     }
   },
   matchmaking: {
+    ensureWsSession: () => ipcRenderer.invoke('mm-ensure-ws-session'),
     start: () => ipcRenderer.invoke('mm-start'),
     stop: (force) => ipcRenderer.invoke('mm-stop', force),
     getState: () => ipcRenderer.invoke('mm-get-state'),

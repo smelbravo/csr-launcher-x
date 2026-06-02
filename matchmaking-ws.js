@@ -52,6 +52,10 @@ class MatchmakingService {
     this._connectTimer = null;
     this._connectSeconds = null;
     this.pendingGroupInvites = [];
+    this.roomUsers = {};
+    this.roomPresence = null;
+    this.memberProfiles = {};
+    this._leavingGroup = false;
   }
 
   isGroupLeader() {
@@ -124,6 +128,9 @@ class MatchmakingService {
         : 0,
       lastError: this.lastError,
       pendingGroupInvites: this.pendingGroupInvites,
+      roomUsers: this.roomUsers,
+      memberProfiles: this.memberProfiles,
+      lobbyMemberIds: this.getLobbyMemberIds(),
       match: match?.id ? { ...match, phase: matchPhase, inChannel: !!this.matchChannel } : null,
       inMatch: !!match?.id,
       pendingAccept: this.shouldShowAcceptModal(),
@@ -150,17 +157,100 @@ class MatchmakingService {
 
   joinChannel(topic) {
     return new Promise((resolve) => {
-      if (!this.socket) return resolve({ channel: null, error: 'Socket not connected' });
+      if (!this.socket) return resolve({ channel: null, error: 'Socket not connected', joinPayload: null });
       const ch = this.socket.channel(topic, {});
       ch.join()
-        .receive('ok', () => resolve({ channel: ch, error: null }))
+        .receive('ok', (payload) => resolve({ channel: ch, error: null, joinPayload: payload || null }))
         .receive('error', (resp) => {
           const reason = resp?.reason || resp?.response?.reason || 'unknown';
           console.warn('[MM] join error', topic, reason);
-          resolve({ channel: null, error: ERROR_MESSAGES[reason] || reason });
+          resolve({ channel: null, error: ERROR_MESSAGES[reason] || reason, joinPayload: null });
         })
-        .receive('timeout', () => resolve({ channel: null, error: 'Channel join timeout' }));
+        .receive('timeout', () => resolve({ channel: null, error: 'Channel join timeout', joinPayload: null }));
     });
+  }
+
+  normalizeMemberIds(members) {
+    if (!Array.isArray(members)) return [];
+    return members
+      .map((m) => {
+        if (m == null) return null;
+        if (typeof m === 'object') return String(m.id ?? m.user_id ?? m.userId ?? '');
+        return String(m);
+      })
+      .filter(Boolean);
+  }
+
+  cacheMemberProfiles(usersById) {
+    if (!usersById) return;
+    Object.entries(usersById).forEach(([id, entry]) => {
+      const user = entry?.user || entry;
+      if (user && (user.name || user.username)) {
+        this.memberProfiles[String(id)] = { ...user, id: String(id) };
+      }
+    });
+  }
+
+  applyGroupState(payload, channel, roomId) {
+    if (this._leavingGroup) return;
+
+    const group = payload?.group || payload || {};
+    const members = this.normalizeMemberIds(group.members);
+    const invited = this.normalizeMemberIds(group.invited);
+    const uid = String(this.userId);
+
+    if (members.length && !members.includes(uid)) {
+      this.cleanupRoomLocal();
+      this.emit();
+      return;
+    }
+
+    const prevCount = this.group?.members?.length ?? 0;
+    if (prevCount && members.length !== prevCount) {
+      this.leaveQueue();
+    }
+
+    const leader = group.leader != null ? String(group.leader) : null;
+
+    this.group = {
+      ...group,
+      id: roomId || this.group?.id,
+      channel,
+      members,
+      invited,
+      leader: leader || (members.length === 1 && members[0] === uid ? uid : this.group?.leader)
+    };
+
+    if (!this.group.leader && members.length === 1 && members[0] === uid) {
+      this.group.leader = uid;
+    }
+
+    this.cacheMemberProfiles(this.roomUsers);
+    this.cacheMemberProfiles(this.onlineUsers);
+    this.emit();
+  }
+
+  getLobbyMemberIds() {
+    return this.normalizeMemberIds(this.group?.members);
+  }
+
+  cleanupRoomLocal() {
+    this.leaveChannel(this.roomChannel);
+    this.roomChannel = null;
+    this.roomPresence = null;
+    this.roomUsers = {};
+    this.group = null;
+    this.groupQueueMembers = [];
+    this.availableQueueType = null;
+  }
+
+  async waitForInitialGroup(timeoutMs = 5000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this.roomChannel && this.group?.id) return true;
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    return !!this.roomChannel;
   }
 
   leaveChannel(ch) {
@@ -205,6 +295,7 @@ class MatchmakingService {
             console.warn('[MM] lobby join failed:', lobbyResult.error);
           }
 
+          await this.waitForInitialGroup(5000);
           this.emit();
           finish({ ok: true });
         } catch (e) {
@@ -241,7 +332,7 @@ class MatchmakingService {
     }
     this.leaveMatch();
     this.leaveQueue();
-    this.leaveGroup();
+    this.cleanupRoomLocal();
     this.cleanupChannels();
     if (this.socket) {
       try {
@@ -473,18 +564,30 @@ class MatchmakingService {
     this.userChannel = ch;
 
     ch.on('group_channel', ({ id }) => {
-      if (id) this.joinOrCreateGroup(id);
+      if (id && !this._leavingGroup) {
+        this.joinOrCreateGroup(id).catch((err) => {
+          console.warn('[MM] group_channel join failed:', err?.message || err);
+        });
+      }
     });
 
     ch.on('group_invite', (payload) => {
+      const inviterId = String(payload.inviter_id || '');
+      const inviterPresence = this.onlineUsers[inviterId]?.user;
       const invite = {
         _id: randomUUID(),
         group_id: payload.group_id,
-        inviter_id: payload.inviter_id,
+        inviter_id: inviterId,
+        inviter_name: payload.inviter_name || inviterPresence?.name || inviterPresence?.username || null,
+        inviter_avatar: payload.inviter_avatar || inviterPresence?.avatar || null,
+        expiresAt: Date.now() + 15000,
         receivedAt: Date.now()
       };
+      if (inviterPresence) {
+        this.memberProfiles[inviterId] = { ...inviterPresence, id: inviterId };
+      }
       this.pendingGroupInvites = [
-        ...this.pendingGroupInvites.filter((i) => i.group_id !== invite.group_id),
+        ...this.pendingGroupInvites.filter((i) => String(i.group_id) !== String(invite.group_id)),
         invite
       ];
       this.emit({ groupInvite: invite });
@@ -506,37 +609,27 @@ class MatchmakingService {
 
   bindRoomChannel(ch, id) {
     this.roomChannel = ch;
+    this.roomUsers = {};
+
+    if (this.roomPresence) {
+      try {
+        this.roomPresence.onSync(() => {});
+      } catch (_) { /* ignore */ }
+    }
+
+    this.roomPresence = new Presence(ch);
+    this.roomPresence.onSync(() => {
+      const users = {};
+      this.roomPresence.list((userId, { metas, user }) => {
+        users[String(userId)] = { metas, user };
+      });
+      this.roomUsers = users;
+      this.cacheMemberProfiles(users);
+      this.emit();
+    });
 
     ch.on('group_state', (payload) => {
-      const group = payload.group || {};
-      const members = (group.members || []).map(String);
-      const invited = (group.invited || []).map(String);
-      const uid = String(this.userId);
-
-      if (members.length && !members.includes(uid)) {
-        this.leaveGroup();
-        return;
-      }
-
-      const prevCount = this.group?.members?.length ?? 0;
-      if (prevCount && members.length !== prevCount) {
-        this.leaveQueue();
-      }
-
-      this.group = {
-        ...group,
-        id,
-        channel: ch,
-        members,
-        invited,
-        leader: group.leader != null ? String(group.leader) : null
-      };
-
-      if (!this.group.leader && members.length === 1 && members[0] === uid) {
-        this.group.leader = uid;
-      }
-
-      this.emit();
+      this.applyGroupState(payload, ch, id);
     });
 
     ch.on('queue_type_state', (payload) => {
@@ -591,7 +684,8 @@ class MatchmakingService {
   async joinOrCreateGroup(roomId) {
     if (!this.connected || !this.userChannel) return null;
 
-    if (roomId && this.group?.id === roomId && this.roomChannel) {
+    const targetId = roomId ? String(roomId) : null;
+    if (targetId && this.group?.id === targetId && this.roomChannel) {
       return this.roomChannel;
     }
 
@@ -599,10 +693,12 @@ class MatchmakingService {
     if (this.roomChannel) {
       this.leaveChannel(this.roomChannel);
       this.roomChannel = null;
+      this.roomPresence = null;
+      this.roomUsers = {};
     }
 
-    const id = roomId || randomUUID();
-    const { channel: ch, error } = await this.joinChannel(`room:${id}`);
+    const id = targetId || randomUUID();
+    const { channel: ch, error, joinPayload } = await this.joinChannel(`room:${id}`);
     if (!ch) {
       this.setError(error || 'Could not create team lobby');
       return null;
@@ -610,30 +706,59 @@ class MatchmakingService {
 
     this.group = {
       id,
-      leader: String(this.userId),
-      members: [String(this.userId)],
+      leader: null,
+      members: [],
       name: null,
-      invited: []
+      invited: [],
+      channel: ch
     };
 
     this.bindRoomChannel(ch, id);
-    ch.push('queue_type', { type: this.localQueueType });
 
-    this.emit();
+    if (joinPayload?.group) {
+      this.applyGroupState(joinPayload, ch, id);
+    } else if (joinPayload && joinPayload.members) {
+      this.applyGroupState({ group: joinPayload }, ch, id);
+    } else if (!targetId) {
+      this.group = {
+        ...this.group,
+        leader: String(this.userId),
+        members: [String(this.userId)]
+      };
+      this.emit();
+    }
+
+    ch.push('queue_type', { type: this.localQueueType });
     return ch;
   }
 
-  leaveGroup() {
-    if (this.roomChannel) {
-      this.leaveQueue();
-      this.roomChannel.push('leave_group', {});
-      this.leaveChannel(this.roomChannel);
-      this.roomChannel = null;
+  async leaveGroup() {
+    if (!this.roomChannel && !this.group) {
+      return { ok: true };
     }
-    this.group = null;
-    this.groupQueueMembers = [];
-    this.availableQueueType = null;
+
+    this._leavingGroup = true;
+    this.leaveQueue();
+
+    const ch = this.roomChannel;
+    if (ch) {
+      try {
+        await new Promise((resolve) => {
+          ch.push('leave_group', {})
+            .receive('ok', () => resolve())
+            .receive('error', () => resolve())
+            .receive('timeout', () => resolve());
+          setTimeout(resolve, 2500);
+        });
+      } catch (_) { /* ignore */ }
+    }
+
+    this.cleanupRoomLocal();
+    setTimeout(() => {
+      this._leavingGroup = false;
+    }, 800);
     this.emit();
+    return { ok: true };
   }
 
   setQueueType(type) {

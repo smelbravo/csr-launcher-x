@@ -38,7 +38,8 @@
     selectedMode: '5v5',
     selectedRegion: 'eu',
     inviteOpen: false,
-    leavingGroup: false
+    leavingGroup: false,
+    lastInviteRenderKey: ''
   };
 
   function t(key) {
@@ -60,8 +61,20 @@
   }
 
   function avatarUrl(user) {
-    if (!user?.avatar || !user?.id) return '';
-    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
+    const id = user?.id != null ? String(user.id) : null;
+    const hash = user?.avatar;
+    if (hash && id) {
+      return `https://cdn.discordapp.com/avatars/${id}/${hash}.png?size=128`;
+    }
+    if (id) {
+      try {
+        const idx = Number((BigInt(id) >> 22n) % 6n);
+        return `https://cdn.discordapp.com/embed/avatars/${idx}.png`;
+      } catch (_) {
+        return 'https://cdn.discordapp.com/embed/avatars/0.png';
+      }
+    }
+    return '';
   }
 
   function formatElapsed(sec) {
@@ -191,6 +204,10 @@
     const id = String(memberId);
     const uid = state.user?.id != null ? String(state.user.id) : null;
     if (uid && id === uid) return state.user;
+    const profiles = mm?.memberProfiles || {};
+    if (profiles[id]) return profiles[id];
+    const roomUser = mm?.roomUsers?.[id]?.user;
+    if (roomUser) return roomUser;
     const presence = mm?.onlineUsers?.[id]?.user;
     if (presence) return presence;
     const friend = state.friendsById[id];
@@ -240,7 +257,11 @@
     wrap.innerHTML = '';
 
     const slots = 5;
-    const members = (mm?.group?.members || []).map(String);
+    const members = (
+      mm?.lobbyMemberIds?.length
+        ? mm.lobbyMemberIds
+        : (mm?.group?.members || [])
+    ).map(String);
     const leaderId = mm?.group?.leader != null ? String(mm.group.leader) : null;
     const inQueue = !!mm?.inQueue;
     const canInvite = !inQueue && mm?.isLeader !== false;
@@ -277,22 +298,41 @@
     const invites = mm?.pendingGroupInvites || [];
     if (!invites.length) {
       container.innerHTML = '';
+      state.lastInviteRenderKey = '';
       return;
     }
 
+    const renderKey = invites
+      .map((i) => `${i._id}:${i.expiresAt}`)
+      .join('|');
+    if (renderKey === state.lastInviteRenderKey && container.childElementCount > 0) {
+      return;
+    }
+    state.lastInviteRenderKey = renderKey;
+
     const onlineUsers = mm?.onlineUsers || {};
+    const profiles = mm?.memberProfiles || {};
     container.innerHTML = invites.map((inv) => {
       const inviterId = String(inv.inviter_id);
       const inviter =
+        (inv.inviter_name || inv.inviter_avatar)
+          ? { id: inviterId, name: inv.inviter_name, avatar: inv.inviter_avatar }
+          : null;
+      const resolved =
+        inviter ||
+        profiles[inviterId] ||
         onlineUsers[inviterId]?.user ||
         state.friendsById[inviterId] ||
         { id: inviterId, name: 'Player' };
+      const avatarSrc = avatarUrl(resolved);
+      const elapsedSec = Math.max(0, (Date.now() - (inv.receivedAt || Date.now())) / 1000);
+
       return `
         <div class="mm-group-invite-toast" data-invite-id="${escapeHtml(inv._id)}">
           <p class="mm-group-invite-title">${t('mm_group_invite_title')}</p>
           <div class="mm-group-invite-user">
-            <img src="${avatarUrl(inviter)}" alt="">
-            <span>${escapeHtml(inviter.name || 'Player')}</span>
+            <img src="${avatarSrc || 'https://cdn.discordapp.com/embed/avatars/0.png'}" alt="" loading="lazy">
+            <span>${escapeHtml(resolved.name || resolved.username || 'Player')}</span>
           </div>
           <div class="mm-group-invite-actions">
             <button type="button" class="btn-play mm-group-invite-accept" data-group-id="${escapeHtml(String(inv.group_id))}">
@@ -302,6 +342,7 @@
               ${t('mm_group_invite_decline')}
             </button>
           </div>
+          <span class="mm-group-invite-timer-bar" style="animation-duration: 15s; animation-delay: -${elapsedSec}s"></span>
         </div>
       `;
     }).join('');
@@ -489,6 +530,17 @@
     renderInvitedRow(mm);
     renderGroupInvites(mm);
 
+    const syncHint = el('mm-lobby-sync-hint');
+    if (syncHint) {
+      const soloInRoom = !!mm?.group?.id && (mm.lobbyMemberIds?.length || mm.group?.members?.length || 0) <= 1;
+      if (soloInRoom && mm?.connected) {
+        syncHint.textContent = t('mm_lobby_sync_hint');
+        syncHint.style.display = 'block';
+      } else {
+        syncHint.style.display = 'none';
+      }
+    }
+
     const eloBadge = el('mm-elo-badge');
     if (eloBadge && state.user) {
       eloBadge.textContent = `${state.user.points ?? state.user.elo ?? '—'} ELO`;
@@ -517,6 +569,13 @@
         btn.innerHTML = `<span>${t('mm_join_queue')}</span>`;
         btn.disabled = !mm?.connected;
       }
+    }
+
+    const btnLeave = el('mm-leave-group');
+    if (btnLeave) {
+      const showLeave = !!(mm?.group?.id);
+      btnLeave.style.display = showLeave ? '' : 'none';
+      btnLeave.disabled = state.leavingGroup;
     }
 
     renderTeamSlots(mm);
@@ -549,6 +608,10 @@
         await CSRMatch.handleUpdate(data);
       }
 
+      if (data.groupInvite) {
+        loadFriendsForInvite().catch(() => {});
+      }
+
       if (state.active) {
         if (data.queueType && data.queueType.includes(':')) {
           const [m, r] = data.queueType.split(':');
@@ -558,6 +621,9 @@
         renderAll(data);
       } else {
         state.mm = data;
+        if (data.groupInvite || data.pendingGroupInvites?.length) {
+          renderGroupInvites(data);
+        }
       }
     });
   }
@@ -585,6 +651,10 @@
     }
 
     renderAll({ connected: false });
+
+    if (window.api.matchmaking.ensureWsSession) {
+      await window.api.matchmaking.ensureWsSession();
+    }
 
     const result = await window.api.matchmaking.start();
     if (!result?.ok) {

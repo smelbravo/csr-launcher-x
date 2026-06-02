@@ -1616,12 +1616,46 @@ body {
 }
 
 .mm-group-invite-toast {
+  position: relative;
+  overflow: hidden;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  padding: 16px 20px;
+  padding: 16px 20px 20px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  border-bottom: 3px solid var(--accent);
+}
+
+@keyframes mm-invite-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.mm-group-invite-timer-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: block;
+  height: 3px;
+  width: 100%;
+  background: var(--accent);
+  border-radius: 0 0 10px 10px;
+  transform-origin: left center;
+  animation-name: mm-invite-shrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  will-change: width;
+}
+
+.mm-lobby-sync-hint {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: -12px 0 16px;
+  padding: 0 12px;
 }
 
 .mm-group-invite-title {

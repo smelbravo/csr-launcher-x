@@ -106,6 +106,7 @@
   "mm_group_invite_accept": "Accept",
   "mm_group_invite_decline": "Decline",
   "mm_invited_label": "Invited:",
+  "mm_lobby_sync_hint": "If a friend joined on the website but does not appear here, close the csrestored.fun tab and use only the launcher (one connection per account).",
 
   "live_match_back": "Back to Matchmaking",
   "live_match_none": "No active match.",

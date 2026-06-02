@@ -106,6 +106,7 @@
   "mm_group_invite_accept": "Aceitar",
   "mm_group_invite_decline": "Recusar",
   "mm_invited_label": "Convidados:",
+  "mm_lobby_sync_hint": "Se o amigo entrou no site mas não aparece aqui, fecha o separador csrestored.fun e usa só o launcher (uma ligação por conta).",
 
   "live_match_back": "Voltar ao Matchmaking",
   "live_match_none": "Sem partida ativa.",

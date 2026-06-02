@@ -610,6 +610,7 @@ ipcMain.handle('start-login', async () => {
           }
 
           await saveAuthCookies();
+          await ensureWebsocketSessionCookie(true);
 
           loginWindow.close();
           loginWindow = null;
@@ -664,6 +665,7 @@ ipcMain.handle('start-login', async () => {
           }
 
           await saveAuthCookies();
+          await ensureWebsocketSessionCookie(true);
 
           loginWindow.close();
           loginWindow = null;
@@ -1025,13 +1027,25 @@ async function syncPartitionCookiesToDefault(partition = 'persist:auth') {
   await saveAuthCookies();
 }
 
+async function waitForCookieInSession(sess, cookieName, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const list = await sess.cookies.get({ url: 'https://csrestored.fun' });
+    const found = list.find((c) => c.name === cookieName);
+    if (found?.value) return found.value;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return null;
+}
+
 /** jwt_websocket_session is set when visiting /app — required for matchmaking. */
-async function ensureWebsocketSessionCookie() {
+async function ensureWebsocketSessionCookie(forceRefresh = false) {
   let cookies = await getCsrCookies();
   let ws = cookies.find((c) => c.name === 'jwt_websocket_session');
-  if (ws?.value) return ws.value;
+  if (ws?.value && !forceRefresh) return ws.value;
 
-  console.log('[MM] Missing jwt_websocket_session — loading /app to refresh cookies');
+  console.log('[MM] Refreshing jwt_websocket_session via /app');
+  const authSession = session.fromPartition('persist:auth');
   const win = new BrowserWindow({
     show: false,
     webPreferences: {
@@ -1043,8 +1057,9 @@ async function ensureWebsocketSessionCookie() {
 
   try {
     await win.loadURL('https://csrestored.fun/app');
-    await new Promise((r) => setTimeout(r, 4000));
+    const token = await waitForCookieInSession(authSession, 'jwt_websocket_session', 20000);
     await syncPartitionCookiesToDefault('persist:auth');
+    if (token) return token;
     cookies = await getCsrCookies();
     ws = cookies.find((c) => c.name === 'jwt_websocket_session');
     return ws?.value || null;
@@ -1156,13 +1171,21 @@ ipcMain.handle('get-csr-match', async (event, matchId) => {
   }
 });
 
+ipcMain.handle('mm-ensure-ws-session', async () => {
+  const token = await ensureWebsocketSessionCookie(false);
+  return { ok: !!token, token: token || null };
+});
+
 ipcMain.handle('mm-start', async () => {
   try {
-    const wsToken = await ensureWebsocketSessionCookie();
+    let wsToken = await ensureWebsocketSessionCookie(false);
+    if (!wsToken) {
+      wsToken = await ensureWebsocketSessionCookie(true);
+    }
     if (!wsToken) {
       return {
         ok: false,
-        error: 'Missing WebSocket session. Log out and log in again via Discord, then open Matchmaking.'
+        error: 'Missing WebSocket session. Log out and log in again via Discord.'
       };
     }
 
@@ -1173,7 +1196,14 @@ ipcMain.handle('mm-start', async () => {
     }
 
     if (!mmService) mmService = new MatchmakingService(sendMatchmakingState);
-    return await mmService.connect(wsToken, userResult.data.id);
+    let result = await mmService.connect(wsToken, userResult.data.id);
+    if (!result.ok) {
+      wsToken = await ensureWebsocketSessionCookie(true);
+      if (wsToken) {
+        result = await mmService.connect(wsToken, userResult.data.id);
+      }
+    }
+    return result;
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -1223,8 +1253,7 @@ ipcMain.handle('mm-leave-queue', async () => {
 
 ipcMain.handle('mm-leave-group', async () => {
   if (!mmService) return { ok: false };
-  mmService.leaveGroup();
-  return { ok: true };
+  return mmService.leaveGroup();
 });
 
 ipcMain.handle('mm-accept-group-invite', async (event, groupId) => {
