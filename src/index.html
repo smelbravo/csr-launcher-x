@@ -95,7 +95,10 @@
             <div id="mm-error" class="mm-error" style="display: none;"></div>
             <div id="mm-content" style="display: none;">
               <div class="mm-team-header">
-                <h2 class="mm-group-name" id="mm-group-name">—</h2>
+                <div class="mm-team-header-left">
+                  <h2 class="mm-group-name" id="mm-group-name">—</h2>
+                  <div class="mm-invited-row" id="mm-invited-row" style="display: none;"></div>
+                </div>
                 <button type="button" class="btn-secondary mm-leave-btn" id="mm-leave-group">
                   <span data-i18n="mm_leave_group"></span>
                 </button>
@@ -115,7 +118,6 @@
               <div class="mm-options card">
                 <div class="mm-options-header">
                   <h3 data-i18n="mm_options"></h3>
-                  <span class="mm-queue-wait" id="mm-queue-wait"></span>
                 </div>
                 <div class="mm-options-grid">
                   <div class="mm-options-col">
@@ -131,21 +133,23 @@
 
               <div class="mm-live card">
                 <h3 data-i18n="mm_live_matches"></h3>
-                <div class="stats-table-wrap">
-                  <table class="stats-table mm-live-table">
-                    <thead>
-                      <tr>
-                        <th data-i18n="mm_col_mode"></th>
-                        <th data-i18n="mm_col_map"></th>
-                        <th colspan="2" data-i18n="mm_col_score"></th>
-                        <th data-i18n="mm_col_duration"></th>
-                        <th data-i18n="mm_col_region"></th>
-                      </tr>
-                    </thead>
-                    <tbody id="mm-live-body"></tbody>
-                  </table>
+                <div class="mm-live-box">
+                  <div class="stats-table-wrap mm-live-table-wrap">
+                    <table class="stats-table mm-live-table">
+                      <thead>
+                        <tr>
+                          <th data-i18n="mm_col_mode"></th>
+                          <th data-i18n="mm_col_map"></th>
+                          <th colspan="2" data-i18n="mm_col_score"></th>
+                          <th data-i18n="mm_col_duration"></th>
+                          <th data-i18n="mm_col_region"></th>
+                        </tr>
+                      </thead>
+                      <tbody id="mm-live-body"></tbody>
+                    </table>
+                  </div>
+                  <p class="mm-live-empty" id="mm-live-empty" data-i18n="mm_no_live_matches"></p>
                 </div>
-                <p class="mm-live-empty" id="mm-live-empty" data-i18n="mm_no_live_matches"></p>
               </div>
             </div>
           </div>
@@ -246,6 +250,17 @@
           <div class="history-list" id="history-list"></div>
         </div>
 
+        <!-- Live Match (matchmaking flow) -->
+        <div class="page" id="page-live-match">
+          <div class="page-header stats-page-header">
+            <button type="button" class="btn-secondary" id="btn-live-match-back">
+              <i class="fa-solid fa-arrow-left"></i>
+              <span data-i18n="live_match_back"></span>
+            </button>
+          </div>
+          <div id="live-match-root" class="live-match-page"></div>
+        </div>
+
         <!-- Match Detail (sub-view) -->
         <div class="page" id="page-match-detail">
           <div class="page-header stats-page-header">
@@ -324,6 +339,34 @@
     </footer>
   </div>
 
+  <!-- Group invite toasts -->
+  <div class="mm-group-invites" id="mm-group-invites"></div>
+
+  <!-- Match accept modal -->
+  <div class="mm-accept-overlay" id="mm-accept-modal">
+    <div class="mm-accept-panel card">
+      <div id="mm-accept-body"></div>
+    </div>
+  </div>
+
+  <!-- Invite friends modal -->
+  <div class="mm-invite-overlay" id="mm-invite-modal">
+    <div class="mm-invite-panel card">
+      <div class="mm-invite-header">
+        <h3 data-i18n="mm_invite_title"></h3>
+        <button type="button" class="mm-invite-close" id="mm-invite-close" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mm-invite-search-wrap">
+        <input type="search" id="mm-invite-search" autocomplete="off" spellcheck="false"
+          data-i18n-placeholder="mm_invite_search" placeholder="Search…">
+        <i class="fa-solid fa-magnifying-glass"></i>
+      </div>
+      <div class="mm-invite-list" id="mm-invite-list"></div>
+    </div>
+  </div>
+
   <!-- Modal -->
   <div class="modal-overlay" id="modal-install">
     <div class="modal">
@@ -352,6 +395,7 @@
 
   <script src="js/inventory.js"></script>
   <script src="js/play.js"></script>
+  <script src="js/match.js"></script>
   <script src="js/matchmaking.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -51,6 +51,7 @@ async function init() {
     setupAuth();
     if (window.CSRInventory) CSRInventory.setupToolbar();
     if (window.CSRPlayStats) CSRPlayStats.setup();
+    if (window.CSRMatch) CSRMatch.setup();
     if (window.CSRMatchmaking) CSRMatchmaking.setup();
     loadSettings();
     checkAuthStatus();
@@ -246,8 +247,14 @@ function navigateToPage(page) {
 
   if (page === 'matchmaking' && window.CSRMatchmaking) {
     CSRMatchmaking.start();
+  } else if (page === 'live-match' && window.CSRMatch) {
+    CSRMatch.start();
   } else if (window.CSRMatchmaking) {
-    CSRMatchmaking.stop();
+    CSRMatchmaking.pause();
+  }
+
+  if (page !== 'live-match' && window.CSRMatch) {
+    CSRMatch.stop();
   }
 
   if (page === 'inventory') {
@@ -607,3 +614,5 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('[App] DOMContentLoaded fired');
   init();
 });
+
+window.CSRApp = { navigateToPage };

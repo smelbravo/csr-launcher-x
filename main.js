@@ -575,6 +575,11 @@ ipcMain.handle('start-login', async () => {
 
     if (url.includes('csrestored.fun') && !url.includes('/login')) {
       try {
+        if (!url.includes('/app') && !authCompleted) {
+          loginWindow.loadURL('https://csrestored.fun/app');
+          return;
+        }
+
         const cookies = await authSession.cookies.get({});
         const csrCookies = cookies.filter(c =>
           c.name.includes('jwt') ||
@@ -624,6 +629,11 @@ ipcMain.handle('start-login', async () => {
     if (authCompleted) return;
     if (url.includes('csrestored.fun') && !url.includes('/login')) {
       try {
+        if (!url.includes('/app') && !authCompleted) {
+          loginWindow.loadURL('https://csrestored.fun/app');
+          return;
+        }
+
         const cookies = await authSession.cookies.get({});
         const csrCookies = cookies.filter(c =>
           c.name.includes('jwt') ||
@@ -735,6 +745,8 @@ ipcMain.handle('check-auth', async () => {
 
 ipcMain.handle('logout', async () => {
   try {
+    if (mmService) mmService.disconnect(true);
+
     const sess = session.defaultSession;
     const cookies = await sess.cookies.get({ domain: '.csrestored.fun' });
 
@@ -747,6 +759,8 @@ ipcMain.handle('logout', async () => {
     if (fs.existsSync(cookiePath)) {
       fs.unlinkSync(cookiePath);
     }
+
+    if (mmService) mmService.disconnect(true);
 
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('auth-status', { loggedIn: false });
@@ -986,6 +1000,62 @@ async function getCsrCookies() {
   return cookies;
 }
 
+async function syncPartitionCookiesToDefault(partition = 'persist:auth') {
+  const authSession = session.fromPartition(partition);
+  const authCookies = await authSession.cookies.get({});
+  const sess = session.defaultSession;
+
+  for (const cookie of authCookies) {
+    if (!cookie.name || (!cookie.domain?.includes('csrestored') && !cookie.name.includes('jwt'))) continue;
+    try {
+      await sess.cookies.set({
+        url: cookie.url || 'https://csrestored.fun',
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain || '.csrestored.fun',
+        path: cookie.path || '/',
+        secure: cookie.secure !== false,
+        httpOnly: cookie.httpOnly !== false,
+        expirationDate: cookie.expirationDate || (Date.now() / 1000) + (30 * 24 * 60 * 60)
+      });
+    } catch (e) {
+      console.warn('[Auth] sync cookie failed:', cookie.name, e.message);
+    }
+  }
+  await saveAuthCookies();
+}
+
+/** jwt_websocket_session is set when visiting /app — required for matchmaking. */
+async function ensureWebsocketSessionCookie() {
+  let cookies = await getCsrCookies();
+  let ws = cookies.find((c) => c.name === 'jwt_websocket_session');
+  if (ws?.value) return ws.value;
+
+  console.log('[MM] Missing jwt_websocket_session — loading /app to refresh cookies');
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      partition: 'persist:auth'
+    }
+  });
+
+  try {
+    await win.loadURL('https://csrestored.fun/app');
+    await new Promise((r) => setTimeout(r, 4000));
+    await syncPartitionCookiesToDefault('persist:auth');
+    cookies = await getCsrCookies();
+    ws = cookies.find((c) => c.name === 'jwt_websocket_session');
+    return ws?.value || null;
+  } catch (e) {
+    console.error('[MM] ensureWebsocketSessionCookie:', e.message);
+    return null;
+  } finally {
+    if (!win.isDestroyed()) win.close();
+  }
+}
+
 function extractApiArray(data, keys = []) {
   if (Array.isArray(data)) return data;
   if (!data || typeof data !== 'object') return [];
@@ -1088,29 +1158,45 @@ ipcMain.handle('get-csr-match', async (event, matchId) => {
 
 ipcMain.handle('mm-start', async () => {
   try {
-    const cookies = await getCsrCookies();
-    const wsCookie = cookies.find((c) => c.name === 'jwt_websocket_session');
-    if (!wsCookie?.value) {
+    const wsToken = await ensureWebsocketSessionCookie();
+    if (!wsToken) {
       return {
         ok: false,
-        error: 'Missing WebSocket session. Log in via Discord (open csrestored.fun once in the browser flow).'
+        error: 'Missing WebSocket session. Log out and log in again via Discord, then open Matchmaking.'
       };
     }
 
+    const cookies = await getCsrCookies();
     const userResult = await fetchCsrApi(`${API_BASE_URL}/users/@me`, cookies);
     if (!userResult.ok || !userResult.data?.id) {
       return { ok: false, error: 'Could not load your CS:R profile. Log in via Discord.' };
     }
 
     if (!mmService) mmService = new MatchmakingService(sendMatchmakingState);
-    return await mmService.connect(wsCookie.value, userResult.data.id);
+    return await mmService.connect(wsToken, userResult.data.id);
   } catch (e) {
     return { ok: false, error: e.message };
   }
 });
 
-ipcMain.handle('mm-stop', async () => {
-  if (mmService) mmService.disconnect();
+ipcMain.handle('mm-stop', async (event, force) => {
+  if (mmService) mmService.disconnect(!!force);
+  return { ok: true };
+});
+
+ipcMain.handle('mm-join-match', async (event, matchId) => {
+  if (!mmService) return { ok: false, error: 'Not connected' };
+  return mmService.joinMatch(matchId);
+});
+
+ipcMain.handle('mm-submit-ban-votes', async (event, votes) => {
+  if (!mmService) return { ok: false, error: 'Not connected' };
+  return mmService.submitBanVotes(votes);
+});
+
+ipcMain.handle('mm-leave-match', async () => {
+  if (!mmService) return { ok: false };
+  mmService.leaveMatch();
   return { ok: true };
 });
 
@@ -1138,8 +1224,39 @@ ipcMain.handle('mm-leave-queue', async () => {
 ipcMain.handle('mm-leave-group', async () => {
   if (!mmService) return { ok: false };
   mmService.leaveGroup();
-  await mmService.joinOrCreateGroup();
   return { ok: true };
+});
+
+ipcMain.handle('mm-accept-group-invite', async (event, groupId) => {
+  if (!mmService) return { ok: false, error: 'Not connected' };
+  return mmService.acceptGroupInvite(groupId);
+});
+
+ipcMain.handle('mm-decline-group-invite', async (event, inviteId) => {
+  if (!mmService) return { ok: false };
+  return mmService.declineGroupInvite(inviteId);
+});
+
+ipcMain.handle('mm-invite-user', async (event, friendUserId) => {
+  if (!mmService) return { ok: false, error: 'Not connected' };
+  return mmService.inviteUser(friendUserId);
+});
+
+ipcMain.handle('get-csr-friends', async () => {
+  try {
+    const cookies = await getCsrCookies();
+    const result = await fetchCsrApi(`${API_BASE_URL}/users/friends`, cookies);
+    if (result.status === 401) {
+      return { error: true, friends: [], unauthorized: true };
+    }
+    if (!result.ok) {
+      return { error: true, friends: [], message: `HTTP ${result.status}` };
+    }
+    const friends = Array.isArray(result.data) ? result.data : extractApiArray(result.data, ['friends', 'data']);
+    return { error: false, friends };
+  } catch (e) {
+    return { error: true, friends: [], message: e.message };
+  }
 });
 
 ipcMain.handle('open-external-url', async (event, url) => {

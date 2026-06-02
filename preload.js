@@ -43,17 +43,24 @@ contextBridge.exposeInMainWorld('api', {
   },
   matchmaking: {
     start: () => ipcRenderer.invoke('mm-start'),
-    stop: () => ipcRenderer.invoke('mm-stop'),
+    stop: (force) => ipcRenderer.invoke('mm-stop', force),
     getState: () => ipcRenderer.invoke('mm-get-state'),
     setQueueType: (type) => ipcRenderer.invoke('mm-set-queue-type', type),
     joinQueue: () => ipcRenderer.invoke('mm-join-queue'),
     leaveQueue: () => ipcRenderer.invoke('mm-leave-queue'),
     leaveGroup: () => ipcRenderer.invoke('mm-leave-group'),
+    inviteUser: (userId) => ipcRenderer.invoke('mm-invite-user', userId),
+    acceptGroupInvite: (groupId) => ipcRenderer.invoke('mm-accept-group-invite', groupId),
+    declineGroupInvite: (inviteId) => ipcRenderer.invoke('mm-decline-group-invite', inviteId),
+    joinMatch: (matchId) => ipcRenderer.invoke('mm-join-match', matchId),
+    submitBanVotes: (votes) => ipcRenderer.invoke('mm-submit-ban-votes', votes),
+    leaveMatch: () => ipcRenderer.invoke('mm-leave-match'),
     onUpdate: (callback) => {
       ipcRenderer.on('mm-state', (event, data) => callback(data));
     }
   },
   csr: {
+    getFriends: () => ipcRenderer.invoke('get-csr-friends'),
     getHistory: () => ipcRenderer.invoke('get-csr-history'),
     getLeaderboard: () => ipcRenderer.invoke('get-csr-leaderboard'),
     getMatch: (id) => ipcRenderer.invoke('get-csr-match', id),
