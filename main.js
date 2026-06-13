@@ -34,9 +34,12 @@ function getCustomLangDir() {
 let mainWindow;
 let gsisServer = null;
 let csrProcess = null;
+let csrProcessPid = null;
+let gameRunningMonitorTimer = null;
+let lastReportedGameRunning = false;
 let mmService = null;
 
-const { MatchmakingService } = require('./matchmaking-ws');
+const { fetchSiteOnlineUsers, clearSitePresenceCache, destroySitePresenceWindow } = require('./site-presence');
 
 function sendMatchmakingState(state) {
   if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
@@ -93,7 +96,7 @@ async function loadAuthCookies() {
       for (const cookie of cookies) {
         try {
           await sess.cookies.set({
-            url: cookie.url || API_BASE_URL,
+            url: cookie.url || cookieStoreUrl(cookie),
             name: cookie.name,
             value: cookie.value,
             domain: cookie.domain || '.csrestored.fun',
@@ -120,12 +123,7 @@ async function saveAuthCookies() {
     const sess = session.defaultSession;
     const cookies = await sess.cookies.get({});
 
-    const csrCookies = cookies.filter(c =>
-      c.name.includes('jwt') ||
-      c.name.includes('session') ||
-      c.name.includes('token') ||
-      (c.domain && c.domain.includes('csrestored'))
-    );
+    const csrCookies = filterAuthCookies(cookies);
 
     const cookiePath = path.join(app.getPath('userData'), 'auth_cookies.json');
     fs.writeFileSync(cookiePath, JSON.stringify(csrCookies, null, 2));
@@ -133,6 +131,84 @@ async function saveAuthCookies() {
   } catch (e) {
     console.error('[Auth] Failed to save auth cookies:', e);
   }
+}
+
+function isAuthCookie(cookie) {
+  if (!cookie?.name) return false;
+  if (cookie.name.includes('jwt') || cookie.name.includes('session') || cookie.name.includes('token')) return true;
+  return cookie.domain && cookie.domain.includes('csrestored');
+}
+
+function filterAuthCookies(cookies) {
+  return (cookies || []).filter(isAuthCookie);
+}
+
+function cookieStoreUrl(cookie) {
+  const domain = (cookie.domain || '').replace(/^\./, '');
+  if (domain.includes('api.csrestored')) return 'https://api.csrestored.fun';
+  return 'https://csrestored.fun';
+}
+
+async function copyCookiesToDefaultSession(cookies) {
+  const sess = session.defaultSession;
+  for (const cookie of cookies) {
+    try {
+      await sess.cookies.set({
+        url: cookieStoreUrl(cookie),
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain || '.csrestored.fun',
+        path: cookie.path || '/',
+        secure: cookie.secure !== false,
+        httpOnly: cookie.httpOnly !== false,
+        expirationDate: cookie.expirationDate || (Date.now() / 1000) + (30 * 24 * 60 * 60)
+      });
+    } catch (e) {
+      console.error('[Auth] Failed to set cookie:', cookie.name, e.message);
+    }
+  }
+}
+
+async function sessionHasValidUser(sess) {
+  const cookies = filterAuthCookies(await sess.cookies.get({}));
+  if (!cookies.some((c) => c.name === 'jwt_session' && c.value)) return false;
+
+  const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+  const { net } = require('electron');
+  return new Promise((resolve) => {
+    const request = net.request({ method: 'GET', url: `${API_BASE_URL}/users/@me` });
+    request.setHeader('Cookie', cookieHeader);
+    request.setHeader('Accept', 'application/json');
+    request.on('response', (response) => {
+      resolve(response.statusCode === 200);
+    });
+    request.on('error', () => resolve(false));
+    request.end();
+  });
+}
+
+async function completeAuthFromPartition(authSession, loginWin, state) {
+  if (state.completed) return true;
+
+  const cookies = filterAuthCookies(await authSession.cookies.get({}));
+  if (!cookies.some((c) => c.name === 'jwt_session' && c.value)) return false;
+
+  const valid = await sessionHasValidUser(authSession);
+  if (!valid) return false;
+
+  state.completed = true;
+  await copyCookiesToDefaultSession(cookies);
+  await saveAuthCookies();
+  await ensureWebsocketSessionCookie(true);
+
+  if (loginWin && !loginWin.isDestroyed()) loginWin.close();
+  loginWindow = null;
+
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('auth-status', { loggedIn: true });
+  }
+  console.log('[Auth] Login completed');
+  return true;
 }
 
 function saveSettings(settings) {
@@ -216,6 +292,7 @@ function createWindow() {
     if (settings.gsisEnabled) {
       startGSIS(settings.gsisPort);
     }
+    startGameRunningMonitor();
   });
 
   Menu.setApplicationMenu(null);
@@ -261,6 +338,47 @@ function startGSIS(port) {
   });
 }
 
+function isCsrExeRunning() {
+  try {
+    if (process.platform === 'win32') {
+      const out = execSync('tasklist /FI "IMAGENAME eq csr.exe" /NH', {
+        encoding: 'utf8',
+        windowsHide: true
+      });
+      return /\bcsr\.exe\b/i.test(out);
+    }
+    const pid = csrProcessPid || csrProcess?.pid;
+    if (!pid) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (e) {
+      return e.code === 'EPERM';
+    }
+  } catch (e) {
+    return false;
+  }
+}
+
+function publishGameRunningState(force = false) {
+  const running = isCsrExeRunning();
+  if (!force && running === lastReportedGameRunning) return;
+  lastReportedGameRunning = running;
+  if (!running) {
+    csrProcess = null;
+    csrProcessPid = null;
+  }
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('game-running', { running });
+  }
+}
+
+function startGameRunningMonitor() {
+  publishGameRunningState(true);
+  if (gameRunningMonitorTimer) return;
+  gameRunningMonitorTimer = setInterval(() => publishGameRunningState(), 2500);
+}
+
 function launchCSR(settings, loginToken) {
   try {
     const gameDir = settings.csgoDir;
@@ -303,20 +421,29 @@ function launchCSR(settings, loginToken) {
       windowsHide: true
     });
 
+    csrProcessPid = csrProcess.pid;
     csrProcess.unref();
 
     csrProcess.on('exit', () => {
-      console.log('[Launch] CSR process exited');
+      console.log('[Launch] CSR spawn handle exited');
       csrProcess = null;
+      setTimeout(() => publishGameRunningState(true), 500);
+      setTimeout(() => publishGameRunningState(true), 2000);
     });
 
     csrProcess.on('error', (err) => {
       console.error('[Launch] CSR error:', err.message);
+      csrProcess = null;
+      csrProcessPid = null;
+      publishGameRunningState(true);
     });
 
     if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.send('game-launch', { success: true });
     }
+
+    setTimeout(() => publishGameRunningState(true), 800);
+    setTimeout(() => publishGameRunningState(true), 2500);
   } catch (err) {
     if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.send('game-launch', { success: false, error: err.message });
@@ -532,8 +659,10 @@ ipcMain.handle('browse-file', async (event, filters) => {
 ipcMain.handle('get-game-status', () => {
   const settings = loadSettings();
   const gameDir = settings.csgoDir;
+  const running = isCsrExeRunning();
+  lastReportedGameRunning = running;
   return {
-    running: csrProcess ? !csrProcess.killed : false,
+    running,
     hasGame: gameDir ? fs.existsSync(path.join(gameDir, 'csr.exe')) : false
   };
 });
@@ -544,13 +673,36 @@ ipcMain.handle('start-login', async () => {
     return;
   }
 
+  const authSession = session.fromPartition('persist:auth');
+  const state = { completed: false };
+  let cookieListener = null;
+  let pollTimer = null;
+
+  const cleanupLoginWatchers = () => {
+    if (cookieListener) {
+      authSession.cookies.removeListener('changed', cookieListener);
+      cookieListener = null;
+    }
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  const tryCompleteLogin = async () => {
+    if (!loginWindow || loginWindow.isDestroyed()) return;
+    const done = await completeAuthFromPartition(authSession, loginWindow, state);
+    if (done) cleanupLoginWatchers();
+  };
+
   loginWindow = new BrowserWindow({
-    width: 500,
-    height: 600,
+    width: 520,
+    height: 720,
     parent: mainWindow,
     modal: true,
     icon: getAppIcon(),
-    title: 'CSR Launcher Beta',
+    title: 'Login — CS:Restored',
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -558,143 +710,57 @@ ipcMain.handle('start-login', async () => {
     }
   });
 
-  loginWindow.loadURL(`https://csrestored.fun/login`).catch((err) => {
-    console.error('[Auth] Login page load error:', err.message);
+  loginWindow.webContents.setWindowOpenHandler(({ url }) => {
+    console.log('[Auth] OAuth popup redirected in-window:', url);
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      loginWindow.loadURL(url);
+    }
+    return { action: 'deny' };
   });
 
-  loginWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('[Auth] Failed to load:', errorCode, errorDescription);
+  cookieListener = () => {
+    tryCompleteLogin().catch((e) => console.error('[Auth] cookie listener:', e.message));
+  };
+  authSession.cookies.on('changed', cookieListener);
+  pollTimer = setInterval(() => {
+    tryCompleteLogin().catch(() => {});
+  }, 800);
+
+  loginWindow.webContents.on('did-finish-load', () => {
+    tryCompleteLogin().catch(() => {});
   });
 
-  const authSession = session.fromPartition('persist:auth');
-  let authCompleted = false;
-
-  loginWindow.webContents.on('did-navigate', async (event, url) => {
+  loginWindow.webContents.on('did-navigate', (event, url) => {
     console.log('[Auth] Navigated to:', url);
-    if (authCompleted) return;
-
-    if (url.includes('csrestored.fun') && !url.includes('/login')) {
-      try {
-        if (!url.includes('/app') && !authCompleted) {
-          loginWindow.loadURL('https://csrestored.fun/app');
-          return;
-        }
-
-        const cookies = await authSession.cookies.get({});
-        const csrCookies = cookies.filter(c =>
-          c.name.includes('jwt') ||
-          c.name.includes('session') ||
-          c.name.includes('token') ||
-          (c.domain && c.domain.includes('csrestored'))
-        );
-
-        if (csrCookies.length > 0) {
-          authCompleted = true;
-          const sess = session.defaultSession;
-
-          for (const cookie of csrCookies) {
-            try {
-              await sess.cookies.set({
-                url: cookie.url || 'https://csrestored.fun',
-                name: cookie.name,
-                value: cookie.value,
-                domain: cookie.domain || '.csrestored.fun',
-                path: cookie.path || '/',
-                secure: cookie.secure !== false,
-                httpOnly: cookie.httpOnly !== false,
-                expirationDate: cookie.expirationDate || (Date.now() / 1000) + (30 * 24 * 60 * 60)
-              });
-            } catch (e) {
-              console.error('[Auth] Failed to set cookie:', cookie.name, e.message);
-            }
-          }
-
-          await saveAuthCookies();
-          await ensureWebsocketSessionCookie(true);
-
-          loginWindow.close();
-          loginWindow = null;
-
-          if (mainWindow && mainWindow.webContents) {
-            mainWindow.webContents.send('auth-status', { loggedIn: true });
-          }
-        }
-      } catch (e) {
-        console.error('[Auth] Cookie capture error:', e);
-      }
-    }
+    tryCompleteLogin().catch(() => {});
   });
 
-  loginWindow.webContents.on('did-navigate-in-page', async (event, url) => {
+  loginWindow.webContents.on('did-navigate-in-page', (event, url) => {
     console.log('[Auth] Navigate in page:', url);
-    if (authCompleted) return;
-    if (url.includes('csrestored.fun') && !url.includes('/login')) {
-      try {
-        if (!url.includes('/app') && !authCompleted) {
-          loginWindow.loadURL('https://csrestored.fun/app');
-          return;
-        }
+    tryCompleteLogin().catch(() => {});
+  });
 
-        const cookies = await authSession.cookies.get({});
-        const csrCookies = cookies.filter(c =>
-          c.name.includes('jwt') ||
-          c.name.includes('session') ||
-          c.name.includes('token') ||
-          (c.domain && c.domain.includes('csrestored'))
-        );
-
-        if (csrCookies.length > 0) {
-          authCompleted = true;
-          const sess = session.defaultSession;
-
-          for (const cookie of csrCookies) {
-            try {
-              await sess.cookies.set({
-                url: cookie.url || 'https://csrestored.fun',
-                name: cookie.name,
-                value: cookie.value,
-                domain: cookie.domain || '.csrestored.fun',
-                path: cookie.path || '/',
-                secure: cookie.secure !== false,
-                httpOnly: cookie.httpOnly !== false,
-                expirationDate: cookie.expirationDate || (Date.now() / 1000) + (30 * 24 * 60 * 60)
-              });
-            } catch (e) {
-              console.error('[Auth] Failed to set cookie:', cookie.name, e.message);
-            }
-          }
-
-          await saveAuthCookies();
-          await ensureWebsocketSessionCookie(true);
-
-          loginWindow.close();
-          loginWindow = null;
-
-          if (mainWindow && mainWindow.webContents) {
-            mainWindow.webContents.send('auth-status', { loggedIn: true });
-          }
-        }
-      } catch (e) {
-        console.error('[Auth] Cookie capture error:', e);
-      }
-    }
+  loginWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('[Auth] Failed to load:', errorCode, errorDescription, validatedURL);
   });
 
   loginWindow.on('closed', () => {
+    cleanupLoginWatchers();
     loginWindow = null;
   });
+
+  try {
+    await loginWindow.loadURL('https://csrestored.fun/login');
+  } catch (err) {
+    console.error('[Auth] Login page load error:', err.message);
+  }
 });
 
 ipcMain.handle('check-auth', async () => {
   try {
     const sess = session.defaultSession;
     const cookies = await sess.cookies.get({});
-    const authCookies = cookies.filter(c =>
-      c.name.includes('jwt') ||
-      c.name.includes('session') ||
-      c.name.includes('token') ||
-      (c.domain && c.domain.includes('csrestored'))
-    );
+    const authCookies = filterAuthCookies(cookies);
     console.log('[Auth Check] Found', authCookies.length, 'auth cookies:', authCookies.map(c => c.name));
 
     if (authCookies.length === 0) {
@@ -749,6 +815,14 @@ ipcMain.handle('logout', async () => {
   try {
     if (mmService) mmService.disconnect(true);
 
+    const authSes = session.fromPartition('persist:auth');
+    const partCookies = await authSes.cookies.get({});
+    for (const cookie of partCookies) {
+      try {
+        await authSes.cookies.remove(cookieStoreUrl(cookie), cookie.name);
+      } catch (_) { /* ignore */ }
+    }
+
     const sess = session.defaultSession;
     const cookies = await sess.cookies.get({ domain: '.csrestored.fun' });
 
@@ -763,6 +837,7 @@ ipcMain.handle('logout', async () => {
     }
 
     if (mmService) mmService.disconnect(true);
+    destroySitePresenceWindow();
 
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('auth-status', { loggedIn: false });
@@ -995,6 +1070,70 @@ ipcMain.handle('get-csr-history', async () => {
   }
 });
 
+ipcMain.handle('get-csr-user-by-id', async (event, userId) => {
+  const id = String(userId ?? '').replace(/\D/g, '');
+  if (!id) return { error: true, user: null, message: 'Invalid user id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await fetchCsrApi(`${API_BASE_URL}/users/${id}`, cookies);
+    if (result.status === 401) {
+      return { error: true, user: null, unauthorized: true };
+    }
+    if (!result.ok || !result.data || result.data.message) {
+      return { error: true, user: null, message: result.data?.message || `HTTP ${result.status}` };
+    }
+    return { error: false, user: result.data };
+  } catch (e) {
+    return { error: true, user: null, message: e.message };
+  }
+});
+
+ipcMain.handle('get-csr-user-inventory', async (event, userId) => {
+  const id = String(userId ?? '').replace(/\D/g, '');
+  if (!id) return { error: true, items: [], message: 'Invalid user id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await fetchCsrApi(`${API_BASE_URL}/users/${id}/inventory`, cookies);
+    if (result.status === 401) {
+      return { error: true, items: [], unauthorized: true };
+    }
+    if (result.status === 403 || result.status === 404) {
+      return { error: true, items: [], private: true, message: 'Inventory not available' };
+    }
+    if (!result.ok) {
+      return { error: true, items: [], message: `HTTP ${result.status}` };
+    }
+    const items = Array.isArray(result.data)
+      ? result.data
+      : extractApiArray(result.data, ['items', 'inventory', 'data']);
+    return { error: false, items };
+  } catch (e) {
+    return { error: true, items: [], message: e.message };
+  }
+});
+
+ipcMain.handle('get-csr-user-history', async (event, userId, pageNum) => {
+  const id = String(userId ?? '').replace(/\D/g, '');
+  const page = Math.max(0, parseInt(pageNum, 10) || 0);
+  if (!id) return { error: true, matches: [], message: 'Invalid user id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await fetchCsrApi(`${API_BASE_URL}/history/user/${id}/${page}`, cookies);
+    if (result.status === 401) {
+      return { error: false, matches: [], unauthorized: true };
+    }
+    if (result.status === 404 || !result.ok) {
+      return { error: false, matches: [] };
+    }
+    const batch = Array.isArray(result.data)
+      ? result.data
+      : extractApiArray(result.data, ['matches', 'history', 'data']);
+    return { error: false, matches: batch || [] };
+  } catch (e) {
+    return { error: true, matches: [], message: e.message };
+  }
+});
+
 async function getCsrCookies() {
   const sess = session.defaultSession;
   let cookies = await sess.cookies.get({ domain: '.csrestored.fun' });
@@ -1004,26 +1143,8 @@ async function getCsrCookies() {
 
 async function syncPartitionCookiesToDefault(partition = 'persist:auth') {
   const authSession = session.fromPartition(partition);
-  const authCookies = await authSession.cookies.get({});
-  const sess = session.defaultSession;
-
-  for (const cookie of authCookies) {
-    if (!cookie.name || (!cookie.domain?.includes('csrestored') && !cookie.name.includes('jwt'))) continue;
-    try {
-      await sess.cookies.set({
-        url: cookie.url || 'https://csrestored.fun',
-        name: cookie.name,
-        value: cookie.value,
-        domain: cookie.domain || '.csrestored.fun',
-        path: cookie.path || '/',
-        secure: cookie.secure !== false,
-        httpOnly: cookie.httpOnly !== false,
-        expirationDate: cookie.expirationDate || (Date.now() / 1000) + (30 * 24 * 60 * 60)
-      });
-    } catch (e) {
-      console.warn('[Auth] sync cookie failed:', cookie.name, e.message);
-    }
-  }
+  const authCookies = filterAuthCookies(await authSession.cookies.get({}));
+  await copyCookiesToDefaultSession(authCookies);
   await saveAuthCookies();
 }
 
@@ -1039,12 +1160,12 @@ async function waitForCookieInSession(sess, cookieName, timeoutMs = 15000) {
 }
 
 /** jwt_websocket_session is set when visiting /app — required for matchmaking. */
-async function ensureWebsocketSessionCookie(forceRefresh = false) {
+async function ensureWebsocketSessionCookie(forceRefresh = false, pageUrl = 'https://csrestored.fun/app') {
   let cookies = await getCsrCookies();
   let ws = cookies.find((c) => c.name === 'jwt_websocket_session');
   if (ws?.value && !forceRefresh) return ws.value;
 
-  console.log('[MM] Refreshing jwt_websocket_session via /app');
+  console.log('[MM] Refreshing jwt_websocket_session via', pageUrl);
   const authSession = session.fromPartition('persist:auth');
   const win = new BrowserWindow({
     show: false,
@@ -1056,7 +1177,7 @@ async function ensureWebsocketSessionCookie(forceRefresh = false) {
   });
 
   try {
-    await win.loadURL('https://csrestored.fun/app');
+    await win.loadURL(pageUrl);
     const token = await waitForCookieInSession(authSession, 'jwt_websocket_session', 20000);
     await syncPartitionCookiesToDefault('persist:auth');
     if (token) return token;
@@ -1118,6 +1239,48 @@ function fetchCsrApi(url, cookies) {
   });
 }
 
+function postCsrApi(url, body, cookies) {
+  return new Promise((resolve) => {
+    const { net } = require('electron');
+    const request = net.request({ method: 'POST', url });
+
+    request.setHeader('Origin', 'https://csrestored.fun');
+    request.setHeader('Referer', 'https://csrestored.fun/');
+    request.setHeader('Accept', 'application/json');
+    request.setHeader('Content-Type', 'application/json');
+
+    if (cookies.length > 0) {
+      request.setHeader('Cookie', cookies.map(c => `${c.name}=${c.value}`).join('; '));
+    }
+
+    const payload = JSON.stringify(body || {});
+
+    request.on('response', (response) => {
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          const parsed = data ? JSON.parse(data) : null;
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode,
+            data: parsed
+          });
+        } catch (e) {
+          resolve({ ok: false, status: response.statusCode, data: null, raw: data });
+        }
+      });
+    });
+
+    request.on('error', (err) => {
+      resolve({ ok: false, error: err.message, data: null });
+    });
+
+    request.write(payload);
+    request.end();
+  });
+}
+
 function makeApiRequest(url, cookies) {
   return fetchCsrApi(url, cookies).then((result) => ({
     error: !result.ok,
@@ -1125,24 +1288,34 @@ function makeApiRequest(url, cookies) {
   }));
 }
 
-ipcMain.handle('get-csr-leaderboard', async () => {
+ipcMain.handle('get-csr-leaderboard', async (event, page) => {
+  const LEADERBOARD_PAGE_SIZE = 50;
+  const pageNum = parseInt(page, 10);
+  const safePage = Number.isFinite(pageNum) && pageNum >= 0 ? pageNum : 0;
+
   try {
     const cookies = await getCsrCookies();
-    const players = [];
+    const result = await fetchCsrApi(`${API_BASE_URL}/users/top/${safePage}`, cookies);
 
-    for (let page = 0; page < 50; page++) {
-      const result = await fetchCsrApi(`${API_BASE_URL}/users/top/${page}`, cookies);
-      if (result.status === 404 || !result.ok) break;
-
-      const batch = Array.isArray(result.data) ? result.data : extractApiArray(result.data, ['players', 'data']);
-      if (!batch.length) break;
-
-      players.push(...batch);
+    if (result.status === 404 || !result.ok) {
+      return {
+        error: safePage === 0,
+        players: [],
+        hasMore: false,
+        page: safePage,
+        message: safePage === 0 ? 'Leaderboard unavailable' : undefined
+      };
     }
 
-    return { error: false, players };
+    const batch = Array.isArray(result.data)
+      ? result.data
+      : extractApiArray(result.data, ['players', 'data']);
+
+    const hasMore = batch.length >= LEADERBOARD_PAGE_SIZE;
+
+    return { error: false, players: batch, hasMore, page: safePage };
   } catch (e) {
-    return { error: true, players: [], message: e.message };
+    return { error: true, players: [], hasMore: false, page: safePage, message: e.message };
   }
 });
 
@@ -1176,99 +1349,63 @@ ipcMain.handle('mm-ensure-ws-session', async () => {
   return { ok: !!token, token: token || null };
 });
 
-ipcMain.handle('mm-start', async () => {
+function mmDisabledResponse() {
+  return { ok: false, disabled: true, error: 'Matchmaking is temporarily unavailable.' };
+}
+
+ipcMain.handle('mm-start', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-ensure-lobby-presence', async () => ({ ok: false, disabled: true }));
+
+ipcMain.handle('mm-stop', async () => ({ ok: true }));
+
+ipcMain.handle('mm-join-match', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-submit-ban-votes', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-leave-match', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-get-state', async () => ({ connected: false, disabled: true }));
+
+ipcMain.handle('mm-ensure-group', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-set-queue-type', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-join-queue', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-leave-queue', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-leave-group', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-accept-group-invite', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-decline-group-invite', async () => mmDisabledResponse());
+
+ipcMain.handle('mm-invite-user', async () => mmDisabledResponse());
+
+ipcMain.handle('get-csr-online-users', async (event, forceRefresh) => {
   try {
-    let wsToken = await ensureWebsocketSessionCookie(false);
-    if (!wsToken) {
-      wsToken = await ensureWebsocketSessionCookie(true);
-    }
-    if (!wsToken) {
-      return {
-        ok: false,
-        error: 'Missing WebSocket session. Log out and log in again via Discord.'
-      };
-    }
+    if (forceRefresh) clearSitePresenceCache();
 
     const cookies = await getCsrCookies();
-    const userResult = await fetchCsrApi(`${API_BASE_URL}/users/@me`, cookies);
-    if (!userResult.ok || !userResult.data?.id) {
-      return { ok: false, error: 'Could not load your CS:R profile. Log in via Discord.' };
+    const hasSession = cookies.some((c) => c.name === 'jwt_session' || c.name === 'jwt_websocket_session');
+    if (!hasSession) {
+      return { ok: false, ids: [], count: 0, onlineUsers: {}, unauthorized: true };
     }
 
-    if (!mmService) mmService = new MatchmakingService(sendMatchmakingState);
-    let result = await mmService.connect(wsToken, userResult.data.id);
-    if (!result.ok) {
-      wsToken = await ensureWebsocketSessionCookie(true);
-      if (wsToken) {
-        result = await mmService.connect(wsToken, userResult.data.id);
-      }
+    let wsToken = await ensureWebsocketSessionCookie(false, 'https://csrestored.fun/app');
+    if (!wsToken) {
+      wsToken = await ensureWebsocketSessionCookie(true, 'https://csrestored.fun/app');
     }
-    return result;
+
+    const site = await fetchSiteOnlineUsers({
+      maxWaitMs: forceRefresh ? 25000 : 18000,
+      cacheMs: forceRefresh ? 0 : 2500
+    });
+    return site ? { ...site, source: 'site' } : { ok: false, ids: [], count: 0, onlineUsers: {} };
   } catch (e) {
-    return { ok: false, error: e.message };
+    return { ok: false, error: e.message, ids: [], count: 0, onlineUsers: {} };
   }
-});
-
-ipcMain.handle('mm-stop', async (event, force) => {
-  if (mmService) mmService.disconnect(!!force);
-  return { ok: true };
-});
-
-ipcMain.handle('mm-join-match', async (event, matchId) => {
-  if (!mmService) return { ok: false, error: 'Not connected' };
-  return mmService.joinMatch(matchId);
-});
-
-ipcMain.handle('mm-submit-ban-votes', async (event, votes) => {
-  if (!mmService) return { ok: false, error: 'Not connected' };
-  return mmService.submitBanVotes(votes);
-});
-
-ipcMain.handle('mm-leave-match', async () => {
-  if (!mmService) return { ok: false };
-  mmService.leaveMatch();
-  return { ok: true };
-});
-
-ipcMain.handle('mm-get-state', async () => {
-  return mmService ? mmService.getPublicState() : { connected: false };
-});
-
-ipcMain.handle('mm-set-queue-type', async (event, type) => {
-  if (!mmService) return { ok: false };
-  mmService.setQueueType(type);
-  return { ok: true };
-});
-
-ipcMain.handle('mm-join-queue', async () => {
-  if (!mmService) return { ok: false, error: 'Not connected' };
-  return mmService.joinQueue();
-});
-
-ipcMain.handle('mm-leave-queue', async () => {
-  if (!mmService) return { ok: false };
-  mmService.leaveQueue();
-  return { ok: true };
-});
-
-ipcMain.handle('mm-leave-group', async () => {
-  if (!mmService) return { ok: false };
-  return mmService.leaveGroup();
-});
-
-ipcMain.handle('mm-accept-group-invite', async (event, groupId) => {
-  if (!mmService) return { ok: false, error: 'Not connected' };
-  return mmService.acceptGroupInvite(groupId);
-});
-
-ipcMain.handle('mm-decline-group-invite', async (event, inviteId) => {
-  if (!mmService) return { ok: false };
-  return mmService.declineGroupInvite(inviteId);
-});
-
-ipcMain.handle('mm-invite-user', async (event, friendUserId) => {
-  if (!mmService) return { ok: false, error: 'Not connected' };
-  return mmService.inviteUser(friendUserId);
 });
 
 ipcMain.handle('get-csr-friends', async () => {
@@ -1285,6 +1422,57 @@ ipcMain.handle('get-csr-friends', async () => {
     return { error: false, friends };
   } catch (e) {
     return { error: true, friends: [], message: e.message };
+  }
+});
+
+ipcMain.handle('invite-csr-friend', async (event, username) => {
+  const name = String(username || '').trim();
+  if (!name) return { error: true, message: 'Username required' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await postCsrApi(`${API_BASE_URL}/users/friends/invite`, { username: name }, cookies);
+    if (result.status === 401) return { error: true, unauthorized: true };
+    if (!result.ok) {
+      const msg = result.data?.message || result.data?.error || `HTTP ${result.status}`;
+      return { error: true, message: msg };
+    }
+    return { error: false };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('accept-csr-friend', async (event, friendId) => {
+  const id = parseInt(friendId, 10);
+  if (!Number.isFinite(id)) return { error: true, message: 'Invalid friend id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await postCsrApi(`${API_BASE_URL}/users/friends/accept`, { id }, cookies);
+    if (result.status === 401) return { error: true, unauthorized: true };
+    if (!result.ok) {
+      const msg = result.data?.message || result.data?.error || `HTTP ${result.status}`;
+      return { error: true, message: msg };
+    }
+    return { error: false };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('delete-csr-friend', async (event, friendId) => {
+  const id = parseInt(friendId, 10);
+  if (!Number.isFinite(id)) return { error: true, message: 'Invalid friend id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await postCsrApi(`${API_BASE_URL}/users/friends/delete`, { id }, cookies);
+    if (result.status === 401) return { error: true, unauthorized: true };
+    if (!result.ok) {
+      const msg = result.data?.message || result.data?.error || `HTTP ${result.status}`;
+      return { error: true, message: msg };
+    }
+    return { error: false };
+  } catch (e) {
+    return { error: true, message: e.message };
   }
 });
 

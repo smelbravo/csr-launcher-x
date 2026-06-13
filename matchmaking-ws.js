@@ -2,9 +2,27 @@
  * CS:Restored matchmaking via Phoenix channels (socket.csrestored.fun).
  */
 const { randomUUID } = require('crypto');
+
+if (typeof global.WebSocket === 'undefined') {
+  try {
+    global.WebSocket = require('ws');
+  } catch (e) {
+    console.warn('[MM] ws polyfill not available:', e.message);
+  }
+}
+
 const { Socket, Presence } = require('phoenix');
 
 const WS_URL = 'https://socket.csrestored.fun/socket';
+
+function getPhoenixTransport() {
+  if (typeof global.WebSocket !== 'undefined') return global.WebSocket;
+  try {
+    return require('ws');
+  } catch (e) {
+    return undefined;
+  }
+}
 
 const ERROR_MESSAGES = {
   bad_request: 'Bad request',
@@ -155,6 +173,50 @@ class MatchmakingService {
     this.lastError = null;
   }
 
+  syncLobbyPresence() {
+    if (!this.presence) return;
+    const users = {};
+    this.presence.list((id, { metas, user }) => {
+      users[id] = { metas, user };
+    });
+    this.onlineUsers = users;
+    this.cacheMemberProfiles(users);
+    this.emit();
+  }
+
+  async ensureLobbyPresence(timeoutMs = 10000) {
+    if (!this.connected || !this.socket) {
+      return { ok: false, error: 'Not connected' };
+    }
+
+    if (!this.lobbyChannel) {
+      const lobbyResult = await this.joinLobby();
+      if (!lobbyResult.channel) {
+        return { ok: false, error: lobbyResult.error || 'Lobby join failed' };
+      }
+    } else {
+      this.syncLobbyPresence();
+    }
+
+    if (Object.keys(this.onlineUsers).length > 0) {
+      return { ok: true, count: Object.keys(this.onlineUsers).length };
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (Object.keys(this.onlineUsers).length > 0) {
+        return { ok: true, count: Object.keys(this.onlineUsers).length };
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    return {
+      ok: true,
+      partial: true,
+      count: Object.keys(this.onlineUsers).length
+    };
+  }
+
   joinChannel(topic) {
     return new Promise((resolve) => {
       if (!this.socket) return resolve({ channel: null, error: 'Socket not connected', joinPayload: null });
@@ -253,6 +315,44 @@ class MatchmakingService {
     return !!this.roomChannel;
   }
 
+  async waitForUserChannel(timeoutMs = 5000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this.userChannel) return this.userChannel;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return this.userChannel;
+  }
+
+  pushRoom(event, payload = {}) {
+    return new Promise((resolve) => {
+      const ch = this.roomChannel;
+      if (!ch) {
+        this.setError('Team lobby not ready');
+        resolve('no_channel');
+        return;
+      }
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      ch.push(event, payload)
+        .receive('ok', () => finish('ok'))
+        .receive('error', (resp) => {
+          const reason = resp?.reason || resp?.response?.reason || 'unknown';
+          this.setError(reason);
+          finish('error');
+        })
+        .receive('timeout', () => {
+          this.setError('Request timeout');
+          finish('timeout');
+        });
+      setTimeout(() => finish('timeout'), 6000);
+    });
+  }
+
   leaveChannel(ch) {
     if (ch) {
       try {
@@ -278,7 +378,10 @@ class MatchmakingService {
         resolve(result);
       };
 
-      this.socket = new Socket(WS_URL, { params: { token: String(token) } });
+      this.socket = new Socket(WS_URL, {
+        params: { token: String(token) },
+        transport: getPhoenixTransport()
+      });
 
       this.socket.onOpen(async () => {
         this.connected = true;
@@ -296,6 +399,9 @@ class MatchmakingService {
           }
 
           await this.waitForInitialGroup(5000);
+          if (!this.roomChannel) {
+            await this.joinOrCreateGroup();
+          }
           this.emit();
           finish({ ok: true });
         } catch (e) {
@@ -545,14 +651,8 @@ class MatchmakingService {
     });
 
     this.presence = new Presence(ch);
-    this.presence.onSync(() => {
-      const users = {};
-      this.presence.list((id, { metas, user }) => {
-        users[id] = { metas, user };
-      });
-      this.onlineUsers = users;
-      this.emit();
-    });
+    this.presence.onSync(() => this.syncLobbyPresence());
+    this.syncLobbyPresence();
 
     return { channel: ch, error: null };
   }
@@ -662,7 +762,8 @@ class MatchmakingService {
   }
 
   async ensureGroup() {
-    if (this.roomChannel) return this.roomChannel;
+    if (this.roomChannel && this.group?.id) return this.roomChannel;
+    if (this.group?.id) return this.joinOrCreateGroup(this.group.id);
     return this.joinOrCreateGroup();
   }
 
@@ -729,6 +830,7 @@ class MatchmakingService {
     }
 
     ch.push('queue_type', { type: this.localQueueType });
+    this.queueTypeState = this.localQueueType;
     return ch;
   }
 
@@ -764,6 +866,7 @@ class MatchmakingService {
   setQueueType(type) {
     if (!type || !type.includes(':')) return;
     this.localQueueType = type;
+    this.queueTypeState = type;
     this.clearError();
 
     if (this.roomChannel && this.isGroupLeader()) {
@@ -805,35 +908,55 @@ class MatchmakingService {
 
   /** Mirror site: Accept (availableQueueType) or Join Queue (leader). */
   async joinQueue() {
-    if (!this.connected || !this.userChannel) {
+    if (!this.connected) {
       this.setError('Not connected — log in via Discord first');
-      return { ok: false };
+      return { ok: false, error: this.lastError };
     }
+
+    await this.waitForUserChannel(5000);
+    if (!this.userChannel) {
+      this.setError('Not connected — log in via Discord first');
+      return { ok: false, error: this.lastError };
+    }
+
     this.clearError();
 
-    const type = this.queueTypeState || this.localQueueType;
-
     if (this.availableQueueType) {
-      return { ok: await this.attachQueueChannel(this.availableQueueType) };
+      const ok = await this.attachQueueChannel(this.availableQueueType);
+      return { ok, error: ok ? null : this.lastError };
     }
 
-    if (this.roomChannel && this.isGroupLeader()) {
-      this.roomChannel.push('queue', {});
-      const ok = await this.attachQueueChannel(type);
-      return { ok };
+    const room = await this.ensureGroup();
+    if (!room) {
+      return { ok: false, error: this.lastError || 'Team lobby not ready' };
     }
 
-    if (!this.group || this.isGroupLeader()) {
-      await this.ensureGroup();
-      if (this.roomChannel && this.isGroupLeader()) {
-        this.roomChannel.push('queue', {});
+    if (!this.isGroupLeader()) {
+      this.setError('Only the group leader can start the queue');
+      return { ok: false, error: this.lastError };
+    }
+
+    const type = this.queueTypeState || this.localQueueType;
+    if (!type || !type.includes(':')) {
+      this.setError('Invalid queue type');
+      return { ok: false, error: this.lastError };
+    }
+
+    if (this.queueTypeState !== this.localQueueType) {
+      const sync = await this.pushRoom('queue_type', { type: this.localQueueType });
+      if (sync === 'ok') {
+        this.queueTypeState = this.localQueueType;
       }
-      const ok = await this.attachQueueChannel(type);
-      return { ok };
     }
 
-    this.setError('Only the group leader can start the queue');
-    return { ok: false };
+    const queueType = this.queueTypeState || this.localQueueType;
+    const pushResult = await this.pushRoom('queue', {});
+    if (pushResult !== 'ok') {
+      return { ok: false, error: this.lastError || 'Could not start queue' };
+    }
+
+    const ok = await this.attachQueueChannel(queueType);
+    return { ok, error: ok ? null : this.lastError };
   }
 
   leaveQueue() {

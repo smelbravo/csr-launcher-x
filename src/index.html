@@ -61,6 +61,10 @@
             <i class="fa-solid fa-briefcase"></i>
             <span data-i18n="nav_inventory"></span>
           </a>
+          <a href="#" class="nav-item" data-page="friends">
+            <i class="fa-solid fa-user-group"></i>
+            <span data-i18n="nav_friends"></span>
+          </a>
           <a href="#" class="nav-item" data-page="history">
             <i class="fa-solid fa-clock-rotate-left"></i>
             <span data-i18n="nav_history"></span>
@@ -88,6 +92,13 @@
         <!-- Matchmaking Page -->
         <div class="page" id="page-matchmaking">
           <div class="mm-page">
+            <div class="mm-coming-soon" id="mm-coming-soon" style="display: none;">
+              <div class="mm-coming-soon-inner">
+                <i class="fa-solid fa-crosshairs"></i>
+                <h2 data-i18n="mm_coming_soon_title"></h2>
+                <p data-i18n="mm_coming_soon_body"></p>
+              </div>
+            </div>
             <div class="stats-loading" id="mm-loading">
               <i class="fa-solid fa-spinner fa-spin"></i>
               <p data-i18n="mm_connecting"></p>
@@ -158,8 +169,19 @@
 
         <!-- Leaderboard Page -->
         <div class="page" id="page-leaderboard">
-          <div class="page-header stats-page-header">
+          <div class="page-header stats-page-header leaderboard-page-header">
             <h2 data-i18n="page_leaderboard_title"></h2>
+            <div class="leaderboard-search-bar">
+              <i class="fa-solid fa-magnifying-glass leaderboard-search-icon" aria-hidden="true"></i>
+              <input type="search" id="leaderboard-search" autocomplete="off" spellcheck="false"
+                data-i18n-placeholder="stats_leaderboard_search_placeholder"
+                placeholder="Search username or user ID…">
+              <button type="button" class="leaderboard-search-clear" id="leaderboard-search-clear"
+                aria-label="Clear search" hidden>
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+              <span class="leaderboard-count-badge" id="leaderboard-count"></span>
+            </div>
             <button class="btn-secondary" id="btn-refresh-leaderboard">
               <i class="fa-solid fa-rotate"></i>
               <span data-i18n="btn_refresh"></span>
@@ -183,12 +205,24 @@
               <tbody id="leaderboard-body"></tbody>
             </table>
           </div>
+          <div class="stats-load-more-wrap">
+            <button type="button" class="btn-load-more" id="btn-leaderboard-load-more" style="display: none;">
+              <span data-i18n="stats_load_more">Load More</span>
+            </button>
+          </div>
         </div>
 
         <!-- Inventory Page -->
         <div class="page" id="page-inventory">
+          <div class="inventory-view-banner" id="inventory-view-banner" hidden>
+            <button type="button" class="btn-secondary" id="btn-inventory-view-back">
+              <i class="fa-solid fa-arrow-left"></i>
+              <span data-i18n="profile_back"></span>
+            </button>
+            <span class="inventory-view-label" id="inventory-view-label"></span>
+          </div>
           <div class="page-header">
-            <h2 data-i18n="page_inventory_title"></h2>
+            <h2 data-i18n="page_inventory_title" id="page-inventory-title"></h2>
           </div>
           <div class="inventory-controls">
             <button class="btn-secondary" id="btn-refresh-inventory">
@@ -196,7 +230,13 @@
               <span data-i18n="btn_refresh"></span>
             </button>
             <span class="inventory-count" id="inventory-count"></span>
-            <span class="inventory-coins" id="inventory-coins"></span>
+            <div class="inventory-coins-wrap" id="inventory-coins-wrap" hidden>
+              <span class="inventory-coins-label" data-i18n="inventory_your_coins">Your coins</span>
+              <span class="inventory-coins-badge">
+                <i class="fa-solid fa-coins inventory-coins-icon" aria-hidden="true"></i>
+                <span class="inventory-coins-value" id="inventory-coins-value"></span>
+              </span>
+            </div>
           </div>
           <div class="inventory-toolbar" id="inventory-toolbar" style="display: none;">
             <div class="inventory-toolbar-row">
@@ -212,6 +252,31 @@
                   <option value="FT" data-i18n="inv_wear_ft">Field-Tested</option>
                   <option value="WW" data-i18n="inv_wear_ww">Well-Worn</option>
                   <option value="BS" data-i18n="inv_wear_bs">Battle-Scarred</option>
+                </select>
+                <select id="inv-phase" title="Doppler phase">
+                  <option value="" data-i18n="inv_all_phases">All phases</option>
+                  <option value="__phase__" data-i18n="inv_any_phase">Phased only</option>
+                  <option value="__gems__" data-i18n="inv_gems_only">Gems only</option>
+                  <option value="ruby" data-i18n="inv_pattern_ruby">Ruby</option>
+                  <option value="sapphire" data-i18n="inv_pattern_sapphire">Sapphire</option>
+                  <option value="bp" data-i18n="inv_pattern_bp">Black Pearl</option>
+                  <option value="emerald" data-i18n="inv_pattern_emerald">Emerald</option>
+                  <option value="p1" data-i18n="inv_pattern_p1">Phase 1</option>
+                  <option value="p2" data-i18n="inv_pattern_p2">Phase 2</option>
+                  <option value="p3" data-i18n="inv_pattern_p3">Phase 3</option>
+                  <option value="p4" data-i18n="inv_pattern_p4">Phase 4</option>
+                </select>
+                <select id="inv-ch" title="CH tier">
+                  <option value="" data-i18n="inv_all_ch">All Case Hardened</option>
+                  <option value="__ch__" data-i18n="inv_ch_tiered">CH tiered only</option>
+                  <option value="ch0" data-i18n="inv_ch_rank1">#1 Blue</option>
+                  <option value="ch1" data-i18n="inv_ch_t1">T1 Blue</option>
+                  <option value="ch2" data-i18n="inv_ch_t2">T2 Blue</option>
+                  <option value="ch3" data-i18n="inv_ch_t3">T3 Blue</option>
+                  <option value="gold0" data-i18n="inv_ch_gold_rank1">#1 Gold</option>
+                  <option value="gold1" data-i18n="inv_ch_gold_t1">G1 Gold</option>
+                  <option value="gold2" data-i18n="inv_ch_gold_t2">G2 Gold</option>
+                  <option value="gold3" data-i18n="inv_ch_gold_t3">G3 Gold</option>
                 </select>
                 <select id="inv-float-sort" title="Float">
                   <option value="" data-i18n="inv_float_order">Float order</option>
@@ -233,6 +298,34 @@
               <p data-i18n="inventory_empty_login"></p>
             </div>
           </div>
+          <div class="inv-load-more-wrap stats-load-more-wrap" id="inv-load-more-wrap" style="display: none;">
+            <button type="button" class="btn-load-more" id="btn-inventory-load-more">
+              <span data-i18n="inv_load_more">Load More</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Friends Page -->
+        <div class="page" id="page-friends">
+          <div class="page-header friends-page-header">
+            <h2 data-i18n="page_friends_title"></h2>
+            <div class="friends-toolbar">
+              <input type="search" id="friends-search" autocomplete="off" spellcheck="false"
+                data-i18n-placeholder="friends_search_placeholder" placeholder="Username">
+              <button type="button" class="btn-secondary" id="btn-friends-invite">
+                <span data-i18n="friends_invite_btn">Invite +</span>
+              </button>
+              <button type="button" class="btn-secondary" id="btn-refresh-friends">
+                <i class="fa-solid fa-rotate"></i>
+                <span data-i18n="btn_refresh"></span>
+              </button>
+            </div>
+          </div>
+          <div class="stats-loading" id="friends-loading" style="display: none;">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <p data-i18n="stats_loading"></p>
+          </div>
+          <div class="friends-list" id="friends-list"></div>
         </div>
 
         <!-- History Page -->
@@ -249,6 +342,70 @@
             <p data-i18n="stats_loading"></p>
           </div>
           <div class="history-list" id="history-list"></div>
+        </div>
+
+        <!-- Player Profile -->
+        <div class="page" id="page-profile">
+          <div class="profile-page">
+            <div class="profile-top-bar">
+              <button type="button" class="btn-secondary" id="btn-profile-back">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span data-i18n="profile_back"></span>
+              </button>
+              <a class="profile-site-link" id="profile-site-link" href="#" target="_blank" rel="noopener">
+                <span data-i18n="profile_open_site"></span>
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              </a>
+            </div>
+            <div class="stats-loading" id="profile-loading">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <p data-i18n="profile_loading"></p>
+            </div>
+            <div id="profile-error" class="profile-error" style="display: none;"></div>
+            <div id="profile-content" style="display: none;">
+              <div class="profile-header card">
+                <div class="profile-header-main">
+                  <img class="profile-avatar" id="profile-avatar" alt="">
+                  <div class="profile-header-info">
+                    <h2 class="profile-name" id="profile-name"></h2>
+                    <p class="profile-elo" id="profile-elo"></p>
+                    <div class="profile-links" id="profile-links"></div>
+                  </div>
+                </div>
+                <button type="button" class="btn-primary profile-inv-btn" id="btn-profile-inventory">
+                  <i class="fa-solid fa-briefcase"></i>
+                  <span data-i18n="profile_watch_inventory"></span>
+                </button>
+              </div>
+              <section class="profile-section">
+                <h3 class="profile-section-title" data-i18n="profile_statistics"></h3>
+                <div class="profile-stat-grid" id="profile-stat-grid"></div>
+              </section>
+              <section class="profile-section">
+                <h3 class="profile-section-title" data-i18n="page_history_title"></h3>
+                <div class="stats-table-wrap profile-history-wrap">
+                  <table class="stats-table profile-history-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="stats_col_date"></th>
+                        <th data-i18n="stats_col_score"></th>
+                        <th data-i18n="stats_col_kda"></th>
+                        <th data-i18n="stats_col_kdr"></th>
+                        <th data-i18n="stats_col_map"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="profile-history-body"></tbody>
+                  </table>
+                </div>
+                <p class="profile-empty" id="profile-history-empty" style="display: none;"></p>
+                <div class="stats-load-more-wrap profile-load-more-wrap" id="profile-load-more-wrap" style="display: none;">
+                  <button type="button" class="btn-load-more" id="btn-profile-load-more">
+                    <span data-i18n="profile_load_more"></span>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
 
         <!-- Live Match (matchmaking flow) -->
@@ -394,8 +551,11 @@
     </div>
   </div>
 
+  <script src="js/skin-patterns.js"></script>
   <script src="js/inventory.js"></script>
+  <script src="js/friends.js"></script>
   <script src="js/play.js"></script>
+  <script src="js/profile.js"></script>
   <script src="js/match.js"></script>
   <script src="js/matchmaking.js"></script>
   <script src="js/app.js"></script>

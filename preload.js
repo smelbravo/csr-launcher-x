@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('api', {
     onLaunchStatus: (callback) => {
       ipcRenderer.on('game-launch', (event, data) => callback(data));
     },
+    onGameRunning: (callback) => {
+      ipcRenderer.on('game-running', (event, data) => callback(data));
+    },
     getStatus: () => ipcRenderer.invoke('get-game-status'),
     checkBeforeLaunch: () => ipcRenderer.invoke('check-and-update-before-launch'),
     downloadWithProgress: (gameDir) => ipcRenderer.invoke('download-updates-with-progress', gameDir)
@@ -43,6 +46,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   matchmaking: {
     ensureWsSession: () => ipcRenderer.invoke('mm-ensure-ws-session'),
+    ensureLobbyPresence: () => ipcRenderer.invoke('mm-ensure-lobby-presence'),
+    ensureGroup: () => ipcRenderer.invoke('mm-ensure-group'),
     start: () => ipcRenderer.invoke('mm-start'),
     stop: (force) => ipcRenderer.invoke('mm-stop', force),
     getState: () => ipcRenderer.invoke('mm-get-state'),
@@ -62,8 +67,15 @@ contextBridge.exposeInMainWorld('api', {
   },
   csr: {
     getFriends: () => ipcRenderer.invoke('get-csr-friends'),
+    getOnlineUsers: (forceRefresh) => ipcRenderer.invoke('get-csr-online-users', !!forceRefresh),
+    inviteFriend: (username) => ipcRenderer.invoke('invite-csr-friend', username),
+    acceptFriend: (id) => ipcRenderer.invoke('accept-csr-friend', id),
+    deleteFriend: (id) => ipcRenderer.invoke('delete-csr-friend', id),
     getHistory: () => ipcRenderer.invoke('get-csr-history'),
-    getLeaderboard: () => ipcRenderer.invoke('get-csr-leaderboard'),
+    getUserById: (id) => ipcRenderer.invoke('get-csr-user-by-id', id),
+    getUserInventory: (id) => ipcRenderer.invoke('get-csr-user-inventory', id),
+    getUserHistory: (id, page) => ipcRenderer.invoke('get-csr-user-history', id, page),
+    getLeaderboard: (page) => ipcRenderer.invoke('get-csr-leaderboard', page),
     getMatch: (id) => ipcRenderer.invoke('get-csr-match', id),
     openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
     checkUpdates: () => ipcRenderer.invoke('check-csr-updates'),

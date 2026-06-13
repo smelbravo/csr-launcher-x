@@ -1,5 +1,10 @@
 const state = {
   currentPage: 'home',
+  navBackPage: 'leaderboard',
+  inventoryViewUserId: null,
+  inventoryViewUserName: '',
+  inventoryReturnProfileId: null,
+  pendingInventoryView: false,
   gameRunning: false,
   gameState: null,
   language: 'english',
@@ -12,6 +17,7 @@ const state = {
 };
 
 const elements = {};
+let _inventoryLoadGen = 0;
 
 function id(name) {
   const el = document.getElementById(name);
@@ -50,12 +56,15 @@ async function init() {
     setupInventory();
     setupAuth();
     if (window.CSRInventory) CSRInventory.setupToolbar();
+    if (window.CSRFriends) CSRFriends.setup();
     if (window.CSRPlayStats) CSRPlayStats.setup();
+    if (window.CSRProfile) CSRProfile.setup();
     if (window.CSRMatch) CSRMatch.setup();
     if (window.CSRMatchmaking) CSRMatchmaking.setup();
     loadSettings();
     checkAuthStatus();
     setupIPCListeners();
+    syncGameRunningStatus();
     console.log('[App] Initialization complete');
   } catch (e) {
     console.error('[App] Init error:', e);
@@ -103,6 +112,28 @@ function tf(key, params) {
   return str;
 }
 
+function formatLocaleNumber(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '0';
+  const locale = state.langData.code || document.documentElement.lang || 'en';
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(num);
+}
+
+let _displayedCoins = null;
+
+function updateInventoryCoinsDisplay(coins) {
+  _displayedCoins = coins;
+  const wrap = id('inventory-coins-wrap');
+  const valueEl = id('inventory-coins-value');
+  if (!wrap || !valueEl) return;
+  if (coins == null) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  valueEl.textContent = formatLocaleNumber(coins);
+}
+
 function applyTranslations() {
   window._invTranslate = t;
   document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -127,6 +158,8 @@ function applyTranslations() {
     CSRInventory.refreshFilterLabels();
     if (CSRInventory.getItems().length) CSRInventory.render();
   }
+  if (_displayedCoins != null) updateInventoryCoinsDisplay(_displayedCoins);
+  if (typeof syncGameRunningStatus === 'function') syncGameRunningStatus();
   window._playTranslate = t;
 }
 
@@ -226,13 +259,27 @@ function setupNavigation() {
   elements.navItems.forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
-      navigateToPage(item.dataset.page);
+      const page = item.dataset.page;
+      if (page === 'inventory') {
+        state.pendingInventoryView = false;
+        clearInventoryViewMode();
+      }
+      navigateToPage(page);
     });
   });
 }
 
-function navigateToPage(page) {
+function navigateToPage(page, options = {}) {
   ensureLayoutStructure();
+
+  if (page !== 'inventory' && state.currentPage === 'inventory') {
+    clearInventoryViewMode();
+  }
+
+  if (page === 'inventory' && !state.pendingInventoryView) {
+    clearInventoryViewMode();
+  }
+  state.pendingInventoryView = false;
 
   elements.navItems.forEach(item => item.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -253,6 +300,12 @@ function navigateToPage(page) {
     CSRMatchmaking.pause();
   }
 
+  if (page === 'friends' && window.CSRFriends) {
+    CSRFriends.start();
+  } else if (window.CSRFriends) {
+    CSRFriends.pause();
+  }
+
   if (page !== 'live-match' && window.CSRMatch) {
     CSRMatch.stop();
   }
@@ -263,7 +316,51 @@ function navigateToPage(page) {
     CSRPlayStats.loadLeaderboard();
   } else if (page === 'history' && window.CSRPlayStats) {
     CSRPlayStats.loadHistory();
+  } else if (page === 'profile' && options.userId && window.CSRProfile) {
+    CSRProfile.load(options.userId);
   }
+}
+
+function openProfile(userId, backPage) {
+  if (!userId) return;
+  state.navBackPage = backPage || state.currentPage || 'leaderboard';
+  elements.navItems.forEach(item => item.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const targetPage = document.getElementById('page-profile');
+  if (targetPage) targetPage.classList.add('active');
+  state.currentPage = 'profile';
+  if (window.CSRProfile) CSRProfile.load(String(userId));
+}
+
+function goBack() {
+  navigateToPage(state.navBackPage || 'leaderboard');
+}
+
+function clearInventoryViewMode() {
+  state.inventoryViewUserId = null;
+  state.inventoryViewUserName = '';
+  state.inventoryReturnProfileId = null;
+  state.pendingInventoryView = false;
+  _inventoryLoadGen += 1;
+
+  const banner = id('inventory-view-banner');
+  const label = id('inventory-view-label');
+  const title = id('page-inventory-title');
+
+  if (banner) banner.hidden = true;
+  if (label) label.textContent = '';
+  if (title && typeof t === 'function') {
+    title.textContent = t('page_inventory_title');
+  }
+}
+
+function openPlayerInventory(userId, userName, returnProfileId) {
+  state.pendingInventoryView = true;
+  state.inventoryViewUserId = String(userId);
+  state.inventoryViewUserName = userName || '';
+  state.inventoryReturnProfileId = returnProfileId ? String(returnProfileId) : String(userId);
+  state.navBackPage = 'profile';
+  navigateToPage('inventory');
 }
 
 function setupTitlebar() {
@@ -390,19 +487,34 @@ function setupGameLaunch() {
     }
 
     setTimeout(() => {
-      if (playText) playText.textContent = t('btn_launch');
-      if (playIcon) playIcon.className = 'fa-solid fa-play';
+      if (!state.gameRunning) {
+        if (playText) playText.textContent = t('btn_launch');
+        if (playIcon) playIcon.className = 'fa-solid fa-play';
+      }
       elements.btnLaunch.disabled = false;
     }, 3000);
 
-    const hint = id('launch-hint');
-    if (hint) hint.style.display = 'block';
+    setTimeout(syncGameRunningStatus, 800);
+    setTimeout(syncGameRunningStatus, 2500);
   });
 }
 
 function setupInventory() {
   if (elements.btnRefreshInventory) {
     elements.btnRefreshInventory.addEventListener('click', () => loadInventory());
+  }
+  const backBtn = id('btn-inventory-view-back');
+  if (backBtn && !backBtn.dataset.bound) {
+    backBtn.dataset.bound = '1';
+    backBtn.addEventListener('click', () => {
+      const returnId = state.inventoryReturnProfileId;
+      clearInventoryViewMode();
+      if (returnId) {
+        openProfile(returnId, 'leaderboard');
+      } else {
+        navigateToPage('inventory');
+      }
+    });
   }
 }
 
@@ -456,23 +568,111 @@ function updateAuthUI(user) {
     if (elements.topbarAvatar && user.avatar && user.id) {
       elements.topbarAvatar.src = `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
     }
+
+    if (user.coins != null) updateInventoryCoinsDisplay(user.coins);
+    if (window.CSRProfile?.bindTopbarOnce) CSRProfile.bindTopbarOnce();
   } else {
     elements.btnLogin.style.display = 'flex';
     elements.topbarUserMenu.style.display = 'none';
+    _displayedCoins = null;
+    updateInventoryCoinsDisplay(null);
   }
 }
 
 async function loadInventory() {
   if (!elements.inventoryGrid || !elements.inventoryCount) return;
 
+  const loadGen = ++_inventoryLoadGen;
+  const viewUserId = state.inventoryViewUserId;
   const loadingEl = id('inventory-loading');
+  const banner = id('inventory-view-banner');
+  const coinsWrap = id('inventory-coins-wrap');
+  const titleEl = id('page-inventory-title');
+
+  function stale() {
+    return loadGen !== _inventoryLoadGen;
+  }
+
   if (loadingEl) loadingEl.style.display = 'flex';
   elements.inventoryGrid.innerHTML = '';
   elements.inventoryCount.textContent = tf('inventory_count', { count: 0 });
   if (window.CSRInventory) CSRInventory.showToolbar(false);
 
+  if (viewUserId) {
+    if (banner) banner.hidden = false;
+    const label = id('inventory-view-label');
+    if (label) {
+      label.textContent = tf('profile_inventory_of', { name: state.inventoryViewUserName || viewUserId });
+    }
+    if (titleEl) {
+      titleEl.textContent = tf('profile_inventory_of', { name: state.inventoryViewUserName || viewUserId });
+    }
+    if (coinsWrap) coinsWrap.hidden = true;
+
+    try {
+      const result = await window.api.csr.getUserInventory(viewUserId);
+      if (stale()) return;
+      if (loadingEl) loadingEl.style.display = 'none';
+
+      if (result?.unauthorized) {
+        elements.inventoryGrid.innerHTML = `
+          <div class="empty-state">
+            <i class="fa-solid fa-user-lock"></i>
+            <p>${t('inventory_empty_login')}</p>
+          </div>
+        `;
+        return;
+      }
+
+      if (result?.error) {
+        const msg = result.private ? t('profile_inventory_private') : t('inventory_error');
+        elements.inventoryGrid.innerHTML = `
+          <div class="empty-state">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <p>${msg}</p>
+          </div>
+        `;
+        return;
+      }
+
+      const items = result.items || [];
+      if (!items.length) {
+        elements.inventoryCount.textContent = tf('inventory_count', { count: 0 });
+        elements.inventoryGrid.innerHTML = `
+          <div class="empty-state">
+            <i class="fa-solid fa-briefcase"></i>
+            <p>${t('inventory_empty')}</p>
+          </div>
+        `;
+        return;
+      }
+
+      if (window.CSRInventory) {
+        CSRInventory.setItems(items);
+        CSRInventory.showToolbar(true);
+        CSRInventory.render();
+      }
+    } catch (e) {
+      if (stale()) return;
+      console.error('[Inventory] Player load error:', e);
+      if (loadingEl) loadingEl.style.display = 'none';
+      elements.inventoryGrid.innerHTML = `
+        <div class="empty-state">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <p>${e.message}</p>
+        </div>
+      `;
+    }
+    return;
+  }
+
+  if (banner) banner.hidden = true;
+  if (titleEl) titleEl.textContent = t('page_inventory_title');
+  if (coinsWrap) coinsWrap.hidden = false;
+
   try {
     const result = await window.api.inventory.getCSR();
+    if (stale()) return;
 
     if (loadingEl) loadingEl.style.display = 'none';
 
@@ -491,8 +691,7 @@ async function loadInventory() {
 
     const userResult = await window.api.auth.getUser();
     if (!userResult.error && userResult.user) {
-      const coinsEl = id('inventory-coins');
-      if (coinsEl) coinsEl.textContent = `${userResult.user.coins || 0} Coins`;
+      updateInventoryCoinsDisplay(userResult.user.coins ?? 0);
     }
 
     if (items.length === 0) {
@@ -512,6 +711,7 @@ async function loadInventory() {
       CSRInventory.render();
     }
   } catch (e) {
+    if (stale()) return;
     console.error('[Inventory] Load error:', e);
     if (loadingEl) loadingEl.style.display = 'none';
     elements.inventoryGrid.innerHTML = `
@@ -592,10 +792,43 @@ function applySettings() {
   if (elements.launchArgsInput) elements.launchArgsInput.value = state.settings.launchArgs || '';
 }
 
+function updateGameRunningUI(running) {
+  state.gameRunning = running;
+  const hint = id('launch-hint');
+  if (hint) hint.style.display = running ? 'block' : 'none';
+
+  if (!elements.btnLaunch) return;
+  const playText = elements.btnLaunch.querySelector('.play-text');
+  const playIcon = elements.btnLaunch.querySelector('i');
+  if (running) {
+    if (playText) playText.textContent = t('btn_playing');
+    if (playIcon) playIcon.className = 'fa-solid fa-gamepad';
+  } else if (!elements.btnLaunch.disabled) {
+    if (playText) playText.textContent = t('btn_launch');
+    if (playIcon) playIcon.className = 'fa-solid fa-play';
+  }
+}
+
+async function syncGameRunningStatus() {
+  try {
+    const status = await window.api.game.getStatus();
+    updateGameRunningUI(status?.running);
+  } catch (e) {
+    updateGameRunningUI(false);
+  }
+}
+
 function setupIPCListeners() {
   window.api.game.onLaunchStatus((data) => {
-    if (data.success) {
-      state.gameRunning = true;
+    if (!data?.success) {
+      updateGameRunningUI(false);
+    }
+  });
+
+  window.api.game.onGameRunning((data) => {
+    updateGameRunningUI(!!data?.running);
+    if (elements.btnLaunch && data?.running) {
+      elements.btnLaunch.disabled = false;
     }
   });
 
@@ -615,4 +848,10 @@ document.addEventListener('DOMContentLoaded', () => {
   init();
 });
 
-window.CSRApp = { navigateToPage };
+window.CSRApp = {
+  navigateToPage,
+  openProfile,
+  openPlayerInventory,
+  goBack,
+  getNavBackPage: () => state.navBackPage || 'leaderboard'
+};

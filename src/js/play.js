@@ -1,9 +1,16 @@
 /* Leaderboard, match history & match detail (CS:R Play stats) */
 
 let _leaderboardLoaded = false;
+let _leaderboardHasMore = false;
+let _leaderboardNextPage = 0;
+let _leaderboardLoading = false;
+let _leaderboardRemotePlayer = null;
+let _leaderboardRemoteLookupId = '';
+let _leaderboardPlayers = [];
 let _historyLoaded = false;
 let _historyMatches = [];
 let _currentUserId = null;
+let _matchReturnProfileId = null;
 
 async function getCurrentUserId() {
   if (_currentUserId) return _currentUserId;
@@ -86,9 +93,10 @@ function avatarUrl(user) {
 }
 
 function normalizeLeaderboardPlayer(p, index) {
-  const id = p.id ?? p.discord_id;
+  const id = p.id ?? p.discord_id ?? p.user_id;
   const avatarHash = p.avatar;
   return {
+    id: id != null ? String(id) : '',
     rank: p.rank ?? p.position ?? index + 1,
     name: p.name ?? p.username ?? p.nickname ?? p.display_name ?? '—',
     avatar: avatarUrl(p) || (avatarHash && id ? `https://cdn.discordapp.com/avatars/${id}/${avatarHash}.png` : ''),
@@ -120,6 +128,7 @@ function normalizeCsrMatchPlayer(p, id) {
   const assists = num(p.assists ?? p.a);
   const avatarHash = p.avatar;
   return {
+    id: id != null ? String(id) : '',
     name: p.name ?? p.username ?? p.nickname ?? '—',
     avatar: avatarUrl(p) || (avatarHash && id ? `https://cdn.discordapp.com/avatars/${id}/${avatarHash}.png` : ''),
     kills,
@@ -287,42 +296,199 @@ function setLoading(elId, show) {
   if (el) el.style.display = show ? 'flex' : 'none';
 }
 
-async function loadLeaderboard(force) {
-  if (_leaderboardLoaded && !force) return;
+function updateLeaderboardLoadMore() {
+  const btn = document.getElementById('btn-leaderboard-load-more');
+  if (!btn) return;
+  btn.style.display = _leaderboardHasMore ? '' : 'none';
+  btn.disabled = _leaderboardLoading;
+}
+
+function getLeaderboardSearchQuery() {
+  return (document.getElementById('leaderboard-search')?.value || '').trim().toLowerCase();
+}
+
+function filterLeaderboardPlayers(players, query) {
+  if (!query) return players;
+  return players.filter(p => {
+    const name = String(p.name).toLowerCase();
+    const id = String(p.id || '').toLowerCase();
+    return name.includes(query) || id.includes(query);
+  });
+}
+
+function updateLeaderboardSearchClear() {
+  const input = document.getElementById('leaderboard-search');
+  const btn = document.getElementById('leaderboard-search-clear');
+  if (!btn) return;
+  btn.hidden = !(input?.value || '').trim();
+}
+
+function updateLeaderboardCount(visible, total, query) {
+  const el = document.getElementById('leaderboard-count');
+  if (!el) return;
+  if (query) {
+    el.textContent = playTf('stats_leaderboard_count_filtered', { shown: visible, total });
+  } else {
+    el.textContent = playTf('stats_leaderboard_count', { count: total });
+  }
+}
+
+function isExactUserIdQuery(q) {
+  return /^\d{17,21}$/.test(String(q || '').trim());
+}
+
+function renderLeaderboardTable() {
   const body = document.getElementById('leaderboard-body');
   if (!body) return;
 
-  setLoading('leaderboard-loading', true);
-  body.innerHTML = '';
+  const query = getLeaderboardSearchQuery();
+  let filtered = filterLeaderboardPlayers(_leaderboardPlayers, query);
+
+  if (!query && _leaderboardRemotePlayer) {
+    _leaderboardRemotePlayer = null;
+    _leaderboardRemoteLookupId = '';
+  }
+
+  if (query && !filtered.length && isExactUserIdQuery(query)) {
+    const id = query.trim();
+    if (_leaderboardRemotePlayer && _leaderboardRemoteLookupId === id) {
+      filtered = [_leaderboardRemotePlayer];
+    } else if (_leaderboardRemoteLookupId !== id) {
+      _leaderboardRemoteLookupId = id;
+      _leaderboardRemotePlayer = null;
+      body.innerHTML = `<tr><td colspan="5" class="stats-empty">${esc(playT('stats_loading'))}</td></tr>`;
+      window.api.csr.getUserById(id).then((res) => {
+        if (getLeaderboardSearchQuery() !== id) return;
+        if (res?.user && !res.error) {
+          _leaderboardRemotePlayer = normalizeLeaderboardPlayer({
+            ...res.user,
+            id,
+            rank: '★'
+          }, 0);
+          renderLeaderboardTable();
+        } else {
+          body.innerHTML = `<tr><td colspan="5" class="stats-empty">${esc(playT('stats_leaderboard_no_results'))}</td></tr>`;
+          updateLeaderboardCount(0, _leaderboardPlayers.length, query);
+        }
+      });
+      return;
+    }
+  }
+
+  if (!_leaderboardPlayers.length && !filtered.length) return;
+
+  if (!filtered.length) {
+    body.innerHTML = `<tr><td colspan="5" class="stats-empty">${esc(playT('stats_leaderboard_no_results'))}</td></tr>`;
+  } else {
+    body.innerHTML = filtered.map(buildLeaderboardRow).join('');
+  }
+
+  updateLeaderboardCount(filtered.length, _leaderboardPlayers.length, query);
+  updateLeaderboardSearchClear();
+  updateLeaderboardLoadMore();
+}
+
+function clearLeaderboardSearch() {
+  const input = document.getElementById('leaderboard-search');
+  if (!input) return;
+  input.value = '';
+  updateLeaderboardSearchClear();
+  renderLeaderboardTable();
+}
+
+function buildLeaderboardRow(p) {
+  const userId = p.id ? esc(String(p.id)) : '';
+  const clickAttr = userId ? ` class="stats-row-clickable" data-user-id="${userId}"` : '';
+  return `
+    <tr${clickAttr}>
+      <td class="stats-rank">${esc(p.rank)}</td>
+      <td class="stats-user">
+        ${p.avatar ? `<img class="stats-avatar" src="${esc(p.avatar)}" alt="">` : '<span class="stats-avatar stats-avatar-fallback"><i class="fa-solid fa-user"></i></span>'}
+        <span>${esc(p.name)}</span>
+      </td>
+      <td>${esc(p.matches)}</td>
+      <td>${esc(p.wins)}</td>
+      <td class="stats-elo">${esc(p.elo)} ELO</td>
+    </tr>
+  `;
+}
+
+function appendLeaderboardRows(players, startIndex) {
+  if (!players?.length) return;
+  const rows = players.map((p, i) => normalizeLeaderboardPlayer(p, startIndex + i));
+  _leaderboardPlayers.push(...rows);
+  renderLeaderboardTable();
+}
+
+async function fetchLeaderboardPage(page, append) {
+  const body = document.getElementById('leaderboard-body');
+  if (!body || _leaderboardLoading) return;
+
+  _leaderboardLoading = true;
+  updateLeaderboardLoadMore();
+
+  if (!append) {
+    setLoading('leaderboard-loading', true);
+    body.innerHTML = '';
+    _leaderboardPlayers = [];
+    updateLeaderboardCount(0, 0, '');
+  }
 
   try {
-    const result = await window.api.csr.getLeaderboard();
-    setLoading('leaderboard-loading', false);
+    const result = await window.api.csr.getLeaderboard(page);
 
-    if (result.error || !result.players?.length) {
-      body.innerHTML = `<tr><td colspan="5" class="stats-empty">${esc(playT('stats_leaderboard_empty'))}</td></tr>`;
+    if (!append) setLoading('leaderboard-loading', false);
+
+    if (result.error) {
+      if (!append) {
+        body.innerHTML = `<tr><td colspan="5" class="stats-empty">${esc(playT('stats_leaderboard_empty'))}</td></tr>`;
+        updateLeaderboardCount(0, 0, getLeaderboardSearchQuery());
+      }
+      _leaderboardHasMore = false;
       return;
     }
 
-    const rows = result.players.map(normalizeLeaderboardPlayer);
-    body.innerHTML = rows.map(p => `
-      <tr>
-        <td class="stats-rank">${esc(p.rank)}</td>
-        <td class="stats-user">
-          ${p.avatar ? `<img class="stats-avatar" src="${esc(p.avatar)}" alt="">` : '<span class="stats-avatar stats-avatar-fallback"><i class="fa-solid fa-user"></i></span>'}
-          <span>${esc(p.name)}</span>
-        </td>
-        <td>${esc(p.matches)}</td>
-        <td>${esc(p.wins)}</td>
-        <td class="stats-elo">${esc(p.elo)} ELO</td>
-      </tr>
-    `).join('');
+    const batch = result.players || [];
+    if (!batch.length && !append) {
+      body.innerHTML = `<tr><td colspan="5" class="stats-empty">${esc(playT('stats_leaderboard_empty'))}</td></tr>`;
+      updateLeaderboardCount(0, 0, getLeaderboardSearchQuery());
+      _leaderboardHasMore = false;
+      return;
+    }
 
+    const startIndex = _leaderboardPlayers.length;
+    appendLeaderboardRows(batch, startIndex);
+
+    _leaderboardHasMore = result.hasMore ?? false;
+    _leaderboardNextPage = page + 1;
     _leaderboardLoaded = true;
   } catch (e) {
-    setLoading('leaderboard-loading', false);
-    body.innerHTML = `<tr><td colspan="5" class="stats-empty">${esc(e.message)}</td></tr>`;
+    if (!append) {
+      setLoading('leaderboard-loading', false);
+      body.innerHTML = `<tr><td colspan="5" class="stats-empty">${esc(e.message)}</td></tr>`;
+    }
+    _leaderboardHasMore = false;
+  } finally {
+    _leaderboardLoading = false;
+    updateLeaderboardLoadMore();
   }
+}
+
+async function loadLeaderboard(force) {
+  if (_leaderboardLoaded && !force) return;
+  if (force) {
+    _leaderboardHasMore = false;
+    _leaderboardNextPage = 0;
+    _leaderboardLoaded = false;
+    _leaderboardPlayers = [];
+    clearLeaderboardSearch();
+  }
+  await fetchLeaderboardPage(0, false);
+}
+
+async function loadMoreLeaderboard() {
+  if (!_leaderboardHasMore || _leaderboardLoading) return;
+  await fetchLeaderboardPage(_leaderboardNextPage, true);
 }
 
 async function loadHistory(force) {
@@ -391,10 +557,21 @@ function renderHistoryRow(m) {
   `;
 }
 
-async function openMatchDetail(matchId) {
+function updateMatchBackButton() {
+  const span = document.querySelector('#btn-match-back span');
+  if (!span) return;
+  span.textContent = _matchReturnProfileId
+    ? playT('stats_back_profile')
+    : playT('stats_back_history');
+}
+
+async function openMatchDetail(matchId, returnProfileId = null) {
+  _matchReturnProfileId = returnProfileId ? String(returnProfileId) : null;
+  updateMatchBackButton();
+
   const fallback = _historyMatches.find(m => String(m.id) === String(matchId)) || null;
 
-  showMatchDetailPage(true);
+  showMatchDetailPage(true, _matchReturnProfileId ? null : 'history');
   const content = document.getElementById('match-detail-content');
   if (!content) return;
   content.innerHTML = `<div class="stats-loading-inline"><i class="fa-solid fa-spinner fa-spin"></i></div>`;
@@ -446,6 +623,15 @@ function renderMatchDetail(detail) {
       window.api.csr.openExternal(detail.demoUrl);
     });
   }
+
+  content.querySelectorAll('tr[data-user-id]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const uid = row.dataset.userId;
+      if (uid && window.CSRApp?.openProfile) {
+        CSRApp.openProfile(uid, 'history');
+      }
+    });
+  });
 }
 
 function renderTeamBlock(team, index) {
@@ -468,7 +654,7 @@ function renderTeamBlock(team, index) {
         </thead>
         <tbody>
           ${team.players.length ? team.players.map(p => `
-            <tr>
+            <tr${p.id ? ` class="stats-row-clickable" data-user-id="${esc(String(p.id))}"` : ''}>
               <td class="stats-user">
                 ${p.avatar ? `<img class="stats-avatar" src="${esc(p.avatar)}" alt="">` : ''}
                 <span>${esc(p.name)}</span>
@@ -485,25 +671,52 @@ function renderTeamBlock(team, index) {
   `;
 }
 
-function showMatchDetailPage(show) {
+function showMatchDetailPage(show, highlightNav = 'history') {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const page = document.getElementById('page-match-detail');
   if (page) page.classList.toggle('active', show);
   if (show) {
     document.querySelectorAll('.nav-item').forEach(n => {
-      n.classList.toggle('active', n.dataset.page === 'history');
+      n.classList.toggle('active', !!highlightNav && n.dataset.page === highlightNav);
     });
   }
 }
 
 function setupPlayStats() {
   const refreshLb = document.getElementById('btn-refresh-leaderboard');
+  const loadMoreLb = document.getElementById('btn-leaderboard-load-more');
+  const searchLb = document.getElementById('leaderboard-search');
+  const clearSearchLb = document.getElementById('leaderboard-search-clear');
   const refreshHist = document.getElementById('btn-refresh-history');
   const backBtn = document.getElementById('btn-match-back');
 
   if (refreshLb && !refreshLb.dataset.bound) {
     refreshLb.dataset.bound = '1';
     refreshLb.addEventListener('click', () => loadLeaderboard(true));
+  }
+  if (loadMoreLb && !loadMoreLb.dataset.bound) {
+    loadMoreLb.dataset.bound = '1';
+    loadMoreLb.addEventListener('click', () => loadMoreLeaderboard());
+  }
+  if (searchLb && !searchLb.dataset.bound) {
+    searchLb.dataset.bound = '1';
+    searchLb.addEventListener('input', () => renderLeaderboardTable());
+  }
+  if (clearSearchLb && !clearSearchLb.dataset.bound) {
+    clearSearchLb.dataset.bound = '1';
+    clearSearchLb.addEventListener('click', () => clearLeaderboardSearch());
+  }
+  const lbBody = document.getElementById('leaderboard-body');
+  if (lbBody && !lbBody.dataset.profileBound) {
+    lbBody.dataset.profileBound = '1';
+    lbBody.addEventListener('click', (e) => {
+      const row = e.target.closest('tr[data-user-id]');
+      if (!row) return;
+      const uid = row.dataset.userId;
+      if (uid && window.CSRApp?.openProfile) {
+        CSRApp.openProfile(uid, 'leaderboard');
+      }
+    });
   }
   if (refreshHist && !refreshHist.dataset.bound) {
     refreshHist.dataset.bound = '1';
@@ -512,6 +725,14 @@ function setupPlayStats() {
   if (backBtn && !backBtn.dataset.bound) {
     backBtn.dataset.bound = '1';
     backBtn.addEventListener('click', () => {
+      const profileId = _matchReturnProfileId;
+      _matchReturnProfileId = null;
+      updateMatchBackButton();
+      if (profileId && window.CSRApp?.openProfile) {
+        const backPage = window.CSRApp.getNavBackPage?.() || 'leaderboard';
+        CSRApp.openProfile(profileId, backPage);
+        return;
+      }
       navigateToPage('history');
       if (window.CSRPlayStats) CSRPlayStats.loadHistory();
     });
@@ -522,8 +743,17 @@ window.CSRPlayStats = {
   setup: setupPlayStats,
   loadLeaderboard,
   loadHistory,
+  openMatch: openMatchDetail,
   invalidate: () => {
     _leaderboardLoaded = false;
+    _leaderboardHasMore = false;
+    _leaderboardNextPage = 0;
+    _leaderboardLoading = false;
+    _leaderboardPlayers = [];
+    _leaderboardRemotePlayer = null;
+    _leaderboardRemoteLookupId = '';
+    clearLeaderboardSearch();
+    updateLeaderboardLoadMore();
     _historyLoaded = false;
     _historyMatches = [];
     _currentUserId = null;

@@ -1,7 +1,9 @@
 /**
- * Matchmaking page — UI + bridge to main-process Phoenix WebSocket.
+ * Matchmaking page — temporarily disabled (coming soon).
  */
 (function () {
+  const MATCHMAKING_DISABLED = true;
+
   const MODES = [
     { id: '5v5', labelKey: 'mm_mode_competitive', icon: 'https://csrestored.fun/competitive.png' },
     { id: '5h5', labelKey: 'mm_mode_hostage', icon: 'https://csrestored.fun/hostage.png' },
@@ -60,6 +62,17 @@
     return document.getElementById(id);
   }
 
+  function showComingSoon() {
+    const loading = el('mm-loading');
+    const content = el('mm-content');
+    const error = el('mm-error');
+    const soon = el('mm-coming-soon');
+    if (loading) loading.style.display = 'none';
+    if (content) content.style.display = 'none';
+    if (error) error.style.display = 'none';
+    if (soon) soon.style.display = 'flex';
+  }
+
   function avatarUrl(user) {
     const id = user?.id != null ? String(user.id) : null;
     const hash = user?.avatar;
@@ -85,7 +98,13 @@
 
   function queueCountModeRegion(modeId, regionId, status) {
     const q = status?.queue || {};
-    return Number(q[`${modeId}:${regionId}`]) || 0;
+    const direct = Number(q[`${modeId}:${regionId}`]) || 0;
+    if (direct) return direct;
+    // Site may expose winter queue as 5w5 while UI mode id is 5v5.
+    if (modeId === '5v5') {
+      return Number(q[`5w5:${regionId}`]) || 0;
+    }
+    return 0;
   }
 
   function queueCountRegion(regionId, status) {
@@ -633,6 +652,11 @@
     state.active = true;
     closeInviteModal();
 
+    if (MATCHMAKING_DISABLED) {
+      showComingSoon();
+      return;
+    }
+
     await loadUser();
     await loadFriendsForInvite().catch(() => {});
     bindMatchmakingUpdates();
@@ -646,7 +670,16 @@
         state.selectedMode = m;
         state.selectedRegion = r;
       }
-      renderAll(existing);
+      if (window.api.matchmaking.ensureGroup) {
+        await window.api.matchmaking.ensureGroup();
+      }
+      const type = buildQueueType();
+      await window.api.matchmaking.setQueueType(type);
+      if (!existing.activePlayers && window.api.matchmaking.ensureLobbyPresence) {
+        await window.api.matchmaking.ensureLobbyPresence();
+      }
+      const refreshed = await window.api.matchmaking.getState();
+      renderAll(refreshed);
       return;
     }
 
@@ -703,21 +736,35 @@
       });
     }
 
-    if (btnQueue) {
+    if (btnQueue && !btnQueue.dataset.bound) {
+      btnQueue.dataset.bound = '1';
       btnQueue.addEventListener('click', async () => {
-        if (!window.api?.matchmaking) return;
-        const snap = await window.api.matchmaking.getState();
-        if (snap?.inQueue) {
-          await window.api.matchmaking.leaveQueue();
+        if (!window.api?.matchmaking || btnQueue.disabled) return;
+        btnQueue.disabled = true;
+        try {
+          const snap = await window.api.matchmaking.getState();
+          if (snap?.inQueue) {
+            await window.api.matchmaking.leaveQueue();
+            const next = await window.api.matchmaking.getState();
+            renderAll(next);
+            return;
+          }
+          if (window.api.matchmaking.ensureGroup) {
+            await window.api.matchmaking.ensureGroup();
+          }
+          await applyQueueType();
+          const result = await window.api.matchmaking.joinQueue();
           const next = await window.api.matchmaking.getState();
-          renderAll(next);
-          return;
-        }
-        await applyQueueType();
-        const result = await window.api.matchmaking.joinQueue();
-        if (!result?.ok) {
-          const next = await window.api.matchmaking.getState();
-          renderAll({ ...next, lastError: next.lastError || t('mm_queue_failed') });
+          if (!result?.ok) {
+            renderAll({
+              ...next,
+              lastError: result?.error || next.lastError || t('mm_queue_failed')
+            });
+          } else {
+            renderAll(next);
+          }
+        } finally {
+          btnQueue.disabled = false;
         }
       });
     }
