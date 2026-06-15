@@ -2,7 +2,7 @@
 
 (function () {
   const CRATES_URL = 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/crates.json';
-  const SPECIALS_KEY = 'csr-launcher:specials-v1';
+  const SPECIALS_KEY = 'csr-launcher:specials-v2';
   const SPECIALS_TTL = 7 * 24 * 3600e3;
   const REEL_WEIGHTS = { 1: 64, 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
   const RARITY_PRICES = { 7: 6942, 6: 2013, 5: 530, 4: 255, 3: 118, 2: 94, 1: 56 };
@@ -50,7 +50,10 @@
   }
 
   function formatCoins(n) {
-    return Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const num = Math.trunc(Number(n));
+    if (!Number.isFinite(num)) return '0';
+    const sign = num < 0 ? '-' : '';
+    return sign + String(Math.abs(num)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   }
 
   function caseArtUrl(id) {
@@ -79,7 +82,7 @@
   function splitSkinName(name) {
     const star = /^★\s*/.test(String(name || ''));
     const clean = String(name || '').replace(/^★\s*/, '').trim();
-    const parts = clean.split(' | ');
+    const parts = clean.split(/\s*\|\s*/);
     return { star, weapon: parts[0] || clean, skin: parts[1] || '' };
   }
 
@@ -280,28 +283,48 @@
     });
   }
 
+  function debounce(fn, ms) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  function formatSpecialLabel(item) {
+    const skin = item.s || '';
+    const phase = item.p || '';
+    if (skin && phase) return `${skin} · ${phase}`;
+    return skin || phase || 'Vanilla';
+  }
+
   function renderContainsItem(item, special) {
     const rInfo = getRarityInfo(parseInt(item.rarity, 10) || (special ? 7 : 1));
-    const { weapon, skin } = splitSkinName(item.name);
-    const img = item.image || skinIconUrl(item.id);
+    const { weapon, skin } = splitSkinName(item.name || `${item.n || ''} | ${item.s || ''}`);
+    const img = special ? (item.i || null) : skinIconUrl(item.id);
     if (special) {
+      const sub = formatSpecialLabel(item);
       return `
         <div class="inventory-item item-rarity-extraordinary case-contains-item case-special-item">
+          <span class="case-item-rarity-strip" style="background:#ffd24a"></span>
           <span class="case-special-badge">RARE</span>
           <div class="item-icon">
             ${img ? `<img src="${esc(img)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=\\'fa-solid fa-star\\'></i>'">` : '<i class="fa-solid fa-star"></i>'}
           </div>
           <div class="item-name" style="color:#ffd24a">★ ${esc(item.n || weapon)}</div>
-          <div class="item-type">${esc(item.s || skin)}${item.p ? ' · ' + esc(item.p) : ''}</div>
+          <div class="item-type case-special-sub">${esc(sub)}</div>
+          <div class="case-special-rarity"><span class="case-special-dot"></span>${esc(t('cases_rare_special'))}</div>
         </div>`;
     }
     return `
       <div class="inventory-item ${rInfo.cls} case-contains-item">
+        <span class="case-item-rarity-strip" style="background:${rInfo.hex}"></span>
         <div class="item-icon">
           ${img ? `<img src="${img}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=\\'fa-solid fa-gun\\'></i>'">` : '<i class="fa-solid fa-gun"></i>'}
         </div>
         <div class="item-name" style="color:${rInfo.hex}">${esc(weapon)}</div>
         <div class="item-type">${esc(skin)}</div>
+        <div class="case-item-rarity-label"><span class="case-item-rarity-dot" style="background:${rInfo.hex}"></span>${esc(rInfo.name)}</div>
       </div>`;
   }
 
@@ -356,8 +379,10 @@
     while (wrap.firstChild) frag.appendChild(wrap.firstChild);
     grid.appendChild(frag);
     if (sub) {
-      const extra = list && list.length ? ` · ★ ${list.length} ${t('cases_special_drops')}` : ` · ★ ${t('cases_special_possible')}`;
-      sub.textContent = `${_detailItems.length} ${t('cases_items_inside')}${extra}`;
+      const extra = list && list.length
+        ? ` · <span class="case-detail-special-count">★ ${list.length} ${t('cases_special_drops')}</span>`
+        : ` · <span class="case-detail-special-count">★ ${t('cases_special_possible')}</span>`;
+      sub.innerHTML = `${_detailItems.length} ${t('cases_items_inside')}${extra}`;
     }
   }
 
@@ -819,6 +844,7 @@
   function setup() {
     if (_bound) return;
     _bound = true;
+    const debouncedRenderGrid = debounce(renderGrid, 120);
     dismissOverlays();
 
     el('btn-case-back')?.addEventListener('click', () => {
@@ -846,8 +872,8 @@
     });
 
     el('cases-search')?.addEventListener('input', (e) => {
-      _search = e.target.value || '';
-      renderGrid();
+      _search = String(e.target.value || '').trim().toLowerCase();
+      debouncedRenderGrid();
     });
     el('cases-sort')?.addEventListener('change', (e) => {
       _sort = e.target.value || 'price';
@@ -864,6 +890,10 @@
       const spin = el('case-spin-stage');
       if (reveal && !reveal.hidden) hideReveal();
       else if (spin && !spin.hidden && _activeSkip) triggerSkip();
+    });
+
+    getSpecialsMap().then(() => {
+      if (_search.trim()) renderGrid();
     });
   }
 

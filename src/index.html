@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:3000 https://api.csrestored.fun https://cdn.csrestored.fun https://socket.csrestored.fun wss://socket.csrestored.fun;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:3000 https://api.csrestored.fun https://cdn.csrestored.fun https://socket.csrestored.fun wss://socket.csrestored.fun https://raw.githubusercontent.com;">
   <title>CSR Launcher</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -314,9 +314,10 @@
 
           <!-- Cases shop -->
           <div class="inv-panel" id="inv-panel-cases" data-inv-panel="cases" hidden>
+            <p class="cases-subtitle" data-i18n="cases_subtitle">Every container on the server — with the rare special drops the site doesn't show you.</p>
             <div class="cases-toolbar" id="cases-toolbar">
               <input type="search" id="cases-search" class="cases-search" autocomplete="off" spellcheck="false"
-                data-i18n-placeholder="cases_search_placeholder" placeholder="Search cases…">
+                data-i18n-placeholder="cases_search_placeholder" placeholder="Search cases, skins, weapons, colors… (e.g. karambit, redline, gold)">
               <select id="cases-kind-filter" class="cases-select" title="Filter">
                 <option value="all" data-i18n="cases_filter_all">All</option>
                 <option value="special" data-i18n="cases_filter_special">★ Special drops</option>
@@ -508,6 +509,11 @@
                 </div>
                 <div class="trades-cat-chips" id="trades-cat-chips"></div>
                 <div class="trades-item-grid" id="trades-item-grid"></div>
+                <div class="inv-load-more-wrap stats-load-more-wrap" id="trades-load-more-wrap" style="display: none;">
+                  <button type="button" class="btn-load-more" id="btn-trades-load-more">
+                    <span data-i18n="inv_load_more">Load More</span>
+                  </button>
+                </div>
                 <div class="trades-summary" id="trades-summary"></div>
                 <button type="button" class="btn-primary trades-send-btn" id="btn-trades-submit" data-i18n="trades_send">Send Trade Offer</button>
                 <p class="trades-form-msg" id="trades-form-msg" hidden></p>

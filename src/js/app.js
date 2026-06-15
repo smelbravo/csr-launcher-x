@@ -116,11 +116,11 @@ function tf(key, params) {
   return str;
 }
 
-function formatLocaleNumber(value) {
-  const num = Number(value);
+function formatCoinsNumber(value) {
+  const num = Math.trunc(Number(value));
   if (!Number.isFinite(num)) return '0';
-  const locale = state.langData.code || document.documentElement.lang || 'en';
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(num);
+  const sign = num < 0 ? '-' : '';
+  return sign + String(Math.abs(num)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
 let _displayedCoins = null;
@@ -133,7 +133,7 @@ function syncCoinsPillVisibility() {
   const tradesWrap = id('trades-coins-pill');
   const tradesVal = id('trades-coins-value');
   const hasCoins = _displayedCoins != null;
-  const text = hasCoins ? formatLocaleNumber(_displayedCoins) : '';
+  const text = hasCoins ? formatCoinsNumber(_displayedCoins) : '';
 
   if (wrap && valueEl) {
     if (!hasCoins || _coinsBarForceHidden || _tradesComposeVisible) wrap.hidden = true;

@@ -11,12 +11,14 @@
   let _view = 'list';
   let _bound = false;
 
+  const PAGE_SIZE = window.CSRInventory?.INVENTORY_PAGE_SIZE || 50;
+
   const state = {
     friends: [],
     partner: null,
     activeSide: 'me',
-    me: { items: [], sel: new Set(), q: '', cat: 'all', loaded: false },
-    them: { items: [], sel: new Set(), q: '', cat: 'all', loaded: false },
+    me: { items: [], sel: new Set(), q: '', cat: 'all', loaded: false, renderLimit: PAGE_SIZE },
+    them: { items: [], sel: new Set(), q: '', cat: 'all', loaded: false, renderLimit: PAGE_SIZE },
     sending: false
   };
 
@@ -266,14 +268,46 @@
     return list.sort((a, b) => b.rarity - a.rarity);
   }
 
-  function renderItemGrid() {
+  function updateTradesLoadMore(filteredTotal, rendered) {
+    const wrap = el('trades-load-more-wrap');
+    const btn = el('btn-trades-load-more');
+    if (!wrap) return;
+    const hasMore = rendered < filteredTotal;
+    wrap.style.display = hasMore ? '' : 'none';
+    if (btn) btn.disabled = false;
+  }
+
+  function renderItemGrid(options = {}) {
+    const resetLimit = options.resetLimit === true;
+    const append = options.append === true;
     const grid = el('trades-item-grid');
     if (!grid) return;
     const side = state.activeSide;
-    grid.innerHTML = '';
+    const s = state[side];
     const list = visibleItems(side);
-    if (!list.length) { grid.innerHTML = `<div class="empty-state"><p>${esc(t('trades_no_items'))}</p></div>`; return; }
-    list.slice(0, 200).forEach((it) => grid.appendChild(tradeCard(it, side)));
+
+    if (resetLimit) s.renderLimit = PAGE_SIZE;
+    if (!append) grid.innerHTML = '';
+
+    if (!list.length) {
+      grid.innerHTML = `<div class="empty-state"><p>${esc(t('trades_no_items'))}</p></div>`;
+      updateTradesLoadMore(0, 0);
+      return;
+    }
+
+    const slice = list.slice(0, s.renderLimit);
+    const startIndex = append ? grid.querySelectorAll('.trade-item-card').length : 0;
+    list.slice(startIndex, s.renderLimit).forEach((it) => grid.appendChild(tradeCard(it, side)));
+    updateTradesLoadMore(list.length, slice.length);
+  }
+
+  function loadMoreTradeItems() {
+    const side = state.activeSide;
+    const s = state[side];
+    const total = visibleItems(side).length;
+    if (s.renderLimit >= total) return;
+    s.renderLimit = Math.min(s.renderLimit + PAGE_SIZE, total);
+    renderItemGrid({ append: true });
   }
 
   function buildCatChips() {
@@ -288,7 +322,7 @@
       b.type = 'button';
       b.className = 'trade-cat-chip' + (state[side].cat === val ? ' active' : '');
       b.textContent = `${label} (${n})`;
-      b.onclick = () => { state[side].cat = val; buildCatChips(); renderItemGrid(); };
+      b.onclick = () => { state[side].cat = val; buildCatChips(); renderItemGrid({ resetLimit: true }); };
       return b;
     };
     box.appendChild(mk('all', 'All', state[side].items.length));
@@ -369,7 +403,8 @@
     state.partner = { id: String(f.id), name, avatar };
     state.me.sel.clear();
     state.them.sel.clear();
-    state.them = { items: [], sel: new Set(), q: '', cat: 'all', loaded: false };
+    state.me.renderLimit = PAGE_SIZE;
+    state.them = { items: [], sel: new Set(), q: '', cat: 'all', loaded: false, renderLimit: PAGE_SIZE };
     el('trades-step-friend').hidden = true;
     el('trades-step-compose').hidden = false;
     el('trades-partner-name').textContent = t('trades_with').replace('{name}', name);
@@ -489,7 +524,11 @@
     });
     el('btn-trades-submit')?.addEventListener('click', sendTrade);
     el('btn-trades-detail-close')?.addEventListener('click', () => { el('trades-detail-modal').hidden = true; });
-    el('trades-item-search')?.addEventListener('input', () => { state[state.activeSide].q = el('trades-item-search').value.trim().toLowerCase(); renderItemGrid(); });
+    el('trades-item-search')?.addEventListener('input', () => {
+      state[state.activeSide].q = el('trades-item-search').value.trim().toLowerCase();
+      renderItemGrid({ resetLimit: true });
+    });
+    el('btn-trades-load-more')?.addEventListener('click', loadMoreTradeItems);
     el('trades-friend-search')?.addEventListener('input', renderFriends);
     ['trades-me-coins', 'trades-them-coins'].forEach((id) => {
       el(id)?.addEventListener('input', updateSummary);

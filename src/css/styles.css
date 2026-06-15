@@ -3435,6 +3435,14 @@ body {
 }
 
 /* Cases toolbar */
+.cases-subtitle {
+  margin: 0 0 12px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  max-width: 52rem;
+}
+
 .cases-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -3510,6 +3518,56 @@ body {
 
 .case-special-item {
   position: relative;
+  border-color: rgba(255, 210, 74, 0.45) !important;
+  background: linear-gradient(180deg, rgba(255, 210, 74, 0.06), rgba(255, 210, 74, 0.02));
+}
+
+.case-contains-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.case-item-rarity-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.case-item-rarity-label,
+.case-special-rarity {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.case-item-rarity-dot,
+.case-special-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.case-special-dot {
+  background: #ffd24a;
+}
+
+.case-special-rarity {
+  color: #ffd24a;
+}
+
+.case-special-sub {
+  color: var(--text-secondary) !important;
+}
+
+.case-detail-special-count {
+  color: #ffd24a;
 }
 
 .case-special-badge {
