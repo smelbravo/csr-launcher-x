@@ -221,10 +221,17 @@
             </button>
             <span class="inventory-view-label" id="inventory-view-label"></span>
           </div>
-          <div class="page-header">
+          <nav class="inventory-subnav" id="inventory-subnav" aria-label="Inventory sections">
+            <button type="button" class="inv-subnav-btn active" data-inv-tab="skins" data-i18n="inv_tab_skins">Inventory</button>
+            <button type="button" class="inv-subnav-btn" data-inv-tab="cases" data-i18n="inv_tab_cases">Cases</button>
+            <button type="button" class="inv-subnav-btn" data-inv-tab="quests" data-i18n="inv_tab_quests">Quests</button>
+            <button type="button" class="inv-subnav-btn" data-inv-tab="marketplace" data-i18n="inv_tab_marketplace">Marketplace</button>
+            <button type="button" class="inv-subnav-btn" data-inv-tab="trades" data-i18n="inv_tab_trades">Trades</button>
+          </nav>
+          <div class="page-header inventory-page-header">
             <h2 data-i18n="page_inventory_title" id="page-inventory-title"></h2>
           </div>
-          <div class="inventory-controls">
+          <div class="inventory-controls" id="inventory-controls-bar">
             <button class="btn-secondary" id="btn-refresh-inventory">
               <i class="fa-solid fa-rotate"></i>
               <span data-i18n="btn_refresh"></span>
@@ -238,6 +245,9 @@
               </span>
             </div>
           </div>
+
+          <!-- Skins inventory -->
+          <div class="inv-panel active" id="inv-panel-skins" data-inv-panel="skins">
           <div class="inventory-toolbar" id="inventory-toolbar" style="display: none;">
             <div class="inventory-toolbar-row">
               <input type="search" id="inv-search" autocomplete="off" spellcheck="false"
@@ -302,6 +312,238 @@
             <button type="button" class="btn-load-more" id="btn-inventory-load-more">
               <span data-i18n="inv_load_more">Load More</span>
             </button>
+          </div>
+          </div>
+
+          <!-- Cases shop -->
+          <div class="inv-panel" id="inv-panel-cases" data-inv-panel="cases" hidden>
+            <div class="cases-toolbar" id="cases-toolbar">
+              <input type="search" id="cases-search" class="cases-search" autocomplete="off" spellcheck="false"
+                data-i18n-placeholder="cases_search_placeholder" placeholder="Search cases…">
+              <select id="cases-kind-filter" class="cases-select" title="Filter">
+                <option value="all" data-i18n="cases_filter_all">All</option>
+                <option value="special" data-i18n="cases_filter_special">★ Special drops</option>
+                <option value="cases" data-i18n="cases_filter_weapon">Weapon cases</option>
+                <option value="agents" data-i18n="cases_filter_agents">Agents</option>
+                <option value="other" data-i18n="cases_filter_capsules">Capsules</option>
+              </select>
+              <select id="cases-sort" class="cases-select" title="Sort">
+                <option value="price" data-i18n="cases_sort_price">Price ↑</option>
+                <option value="price-d" data-i18n="cases_sort_price_d">Price ↓</option>
+                <option value="name" data-i18n="cases_sort_name">Name</option>
+              </select>
+              <span class="cases-count" id="cases-count"></span>
+              <span class="cases-balance" id="cases-balance" hidden>
+                <i class="fa-solid fa-coins" aria-hidden="true"></i>
+                <span id="cases-balance-value"></span>
+              </span>
+            </div>
+            <div class="cases-msg" id="cases-msg" hidden></div>
+            <div class="inv-panel-loading" id="cases-loading" style="display: none;">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            </div>
+            <div id="cases-shop-view">
+              <div class="cases-grid" id="cases-grid"></div>
+            </div>
+            <div id="cases-detail-view" hidden>
+              <div class="case-detail-header">
+                <button type="button" class="btn-link case-detail-back" id="btn-case-back">
+                  <i class="fa-solid fa-arrow-left"></i> <span data-i18n="cases_go_back">Go Back</span>
+                </button>
+                <h3 class="case-detail-title" id="case-detail-title"></h3>
+                <div class="case-detail-price" id="case-detail-price"></div>
+              </div>
+              <div class="case-detail-sub" id="case-detail-sub"></div>
+              <div class="case-detail-preview" id="case-detail-preview"></div>
+              <div class="case-detail-actions">
+                <button type="button" class="btn-primary" id="btn-case-open" data-i18n="cases_open">Open Container</button>
+                <button type="button" class="btn-primary" id="btn-case-quick-open" data-i18n="cases_quick_open">Quick Open</button>
+                <button type="button" class="btn-secondary" id="btn-case-buy" data-i18n="cases_buy">Buy Container</button>
+              </div>
+              <h4 class="case-contains-title" data-i18n="cases_contains">Case Contains</h4>
+              <div class="case-contains-grid inventory-grid" id="case-contains-grid"></div>
+            </div>
+            <div class="case-spin-stage" id="case-spin-stage" hidden>
+              <div class="case-spin-head">
+                <img id="case-spin-art" alt="" class="case-spin-art">
+                <span id="case-spin-title" class="case-spin-title"></span>
+              </div>
+              <div class="case-reel-window">
+                <div class="case-reel-marker"></div>
+                <div class="case-reel" id="case-reel"></div>
+              </div>
+              <p class="case-spin-hint" data-i18n="cases_spin_hint">Click to skip</p>
+            </div>
+            <div class="case-reveal-overlay" id="case-reveal" hidden>
+              <div class="case-reveal-card" id="case-reveal-card">
+                <div class="case-reveal-tag" id="case-reveal-tag"></div>
+                <div class="case-reveal-art" id="case-reveal-art"></div>
+                <h3 class="case-reveal-name" id="case-reveal-name"></h3>
+                <div class="case-reveal-chips" id="case-reveal-chips"></div>
+                <div class="case-reveal-stats" id="case-reveal-stats"></div>
+                <div class="case-reveal-actions">
+                  <button type="button" class="btn-primary" id="btn-case-reveal-again" data-i18n="cases_open_another">Open another</button>
+                  <button type="button" class="btn-secondary" id="btn-case-reveal-sell" hidden data-i18n="cases_quick_sell">Quick sell</button>
+                  <button type="button" class="btn-link" id="btn-case-reveal-close" data-i18n="cases_reveal_close">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quests -->
+          <div class="inv-panel" id="inv-panel-quests" data-inv-panel="quests" hidden>
+            <div class="empty-state inv-empty-state">
+              <i class="fa-solid fa-list-check"></i>
+              <p data-i18n="inv_quests_empty">No quests available.</p>
+            </div>
+          </div>
+
+          <!-- Marketplace -->
+          <div class="inv-panel" id="inv-panel-marketplace" data-inv-panel="marketplace" hidden>
+            <div class="inventory-toolbar mp-toolbar" id="mp-toolbar">
+              <div class="inventory-toolbar-row">
+                <input type="search" id="mp-search" autocomplete="off" spellcheck="false"
+                  data-i18n-placeholder="inv_search_placeholder" placeholder="Search weapon or skin…">
+                <div class="mp-toolbar-actions">
+                  <button type="button" class="btn-secondary" id="btn-mp-my-offers" data-i18n="mp_my_offers">My offers</button>
+                  <button type="button" class="btn-primary" id="btn-mp-create"><span data-i18n="mp_create_offer">Create offer</span> +</button>
+                </div>
+              </div>
+              <div class="inventory-toolbar-row">
+                <div class="inventory-filters">
+                  <select id="mp-type" title="Type">
+                    <option value="" data-i18n="inv_all_types">All types</option>
+                  </select>
+                  <select id="mp-rarity" title="Rarity"></select>
+                  <select id="mp-wear" title="Wear">
+                    <option value="" data-i18n="inv_all_wear">All wear</option>
+                    <option value="FN" data-i18n="inv_wear_fn">Factory New</option>
+                    <option value="MW" data-i18n="inv_wear_mw">Minimal Wear</option>
+                    <option value="FT" data-i18n="inv_wear_ft">Field-Tested</option>
+                    <option value="WW" data-i18n="inv_wear_ww">Well-Worn</option>
+                    <option value="BS" data-i18n="inv_wear_bs">Battle-Scarred</option>
+                  </select>
+                  <select id="mp-phase" title="Doppler phase">
+                    <option value="" data-i18n="inv_all_phases">All phases</option>
+                  </select>
+                  <select id="mp-ch" title="CH tier">
+                    <option value="" data-i18n="inv_all_ch">All Case Hardened</option>
+                  </select>
+                  <select id="mp-float-sort" title="Float">
+                    <option value="" data-i18n="inv_float_order">Float order</option>
+                    <option value="asc" data-i18n="inv_float_asc">Float: Low → High</option>
+                    <option value="desc" data-i18n="inv_float_desc">Float: High → Low</option>
+                  </select>
+                  <select id="mp-price-sort" title="Price">
+                    <option value="" data-i18n="mp_price_order">Price order</option>
+                    <option value="asc" data-i18n="mp_price_asc">Price: Low → High</option>
+                    <option value="desc" data-i18n="mp_price_desc">Price: High → Low</option>
+                  </select>
+                  <button type="button" class="btn-secondary btn-inv-clear" id="mp-clear" data-i18n="inv_clear">Clear</button>
+                </div>
+              </div>
+              <div class="inventory-filter-count" id="mp-filter-count"></div>
+            </div>
+            <div class="inv-panel-loading" id="mp-loading" style="display: none;">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            </div>
+            <div class="inventory-grid mp-grid" id="mp-grid"></div>
+            <div class="inv-load-more-wrap stats-load-more-wrap" id="mp-load-more-wrap" style="display: none;">
+              <button type="button" class="btn-load-more" id="btn-mp-load-more">
+                <span data-i18n="inv_load_more">Load More</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Trades -->
+          <div class="inv-panel" id="inv-panel-trades" data-inv-panel="trades" hidden>
+            <div class="trades-header">
+              <div class="trades-subtabs" id="trades-subtabs">
+                <button type="button" class="trades-subtab active" data-trades-view="list" data-i18n="trades_tab_list">Trades</button>
+                <button type="button" class="trades-subtab" data-trades-view="create" data-i18n="trades_tab_create">Create Offer</button>
+              </div>
+            </div>
+            <div class="trades-view" id="trades-view-list">
+              <div class="trades-filter-row">
+                <button type="button" class="trades-filter active" data-trades-filter="all" data-i18n="trades_filter_all">All</button>
+                <button type="button" class="trades-filter" data-trades-filter="pending" data-i18n="trades_filter_pending">Pending</button>
+                <button type="button" class="trades-filter" data-trades-filter="accepted" data-i18n="trades_filter_accepted">Accepted</button>
+                <button type="button" class="trades-filter" data-trades-filter="rejected" data-i18n="trades_filter_rejected">Rejected</button>
+              </div>
+              <div class="inv-panel-loading" id="trades-loading" style="display: none;">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+              </div>
+              <div class="trades-list" id="trades-list"></div>
+            </div>
+            <div class="trades-view" id="trades-view-create" hidden>
+              <div id="trades-step-friend" class="trades-friend-step">
+                <div class="trades-friend-toolbar">
+                  <input type="search" id="trades-friend-search" class="trades-search" autocomplete="off" spellcheck="false"
+                    data-i18n-placeholder="trades_search_friends" placeholder="Search friends…">
+                </div>
+                <div class="trades-friend-grid" id="trades-friend-grid"></div>
+              </div>
+              <div id="trades-step-compose" hidden>
+                <div class="trades-partner-bar" id="trades-partner-bar">
+                  <div class="trades-partner-info">
+                    <img class="trades-partner-avatar" id="trades-partner-avatar" alt="" hidden>
+                    <span id="trades-partner-name"></span>
+                  </div>
+                  <button type="button" class="btn-secondary btn-sm" id="btn-trades-change-friend" data-i18n="trades_change_friend">Change friend</button>
+                </div>
+                <div class="trades-side-tabs">
+                  <button type="button" class="trades-side-tab active" data-trade-side="me" data-i18n="trades_you_give">YOU GIVE</button>
+                  <button type="button" class="trades-side-tab" data-trade-side="them" data-i18n="trades_you_receive">YOU RECEIVE</button>
+                </div>
+                <div class="trades-compose-toolbar">
+                  <input type="search" id="trades-item-search" class="trades-search" autocomplete="off" spellcheck="false"
+                    data-i18n-placeholder="trades_search_items" placeholder="Search items…">
+                </div>
+                <div class="trades-coins-panel">
+                  <div class="trades-coins-field">
+                    <label data-i18n="trades_coins_you_offer">Coins you offer</label>
+                    <input type="number" id="trades-me-coins" min="0" step="1" value="0">
+                  </div>
+                  <div class="trades-coins-field">
+                    <label data-i18n="trades_coins_they_offer">Coins they offer</label>
+                    <input type="number" id="trades-them-coins" min="0" step="1" value="0">
+                  </div>
+                </div>
+                <div class="trades-cat-chips" id="trades-cat-chips"></div>
+                <div class="trades-item-grid" id="trades-item-grid"></div>
+                <div class="trades-summary" id="trades-summary"></div>
+                <button type="button" class="btn-primary trades-send-btn" id="btn-trades-submit" data-i18n="trades_send">Send Trade Offer</button>
+                <p class="trades-form-msg" id="trades-form-msg" hidden></p>
+              </div>
+            </div>
+            <div class="trades-detail-modal" id="trades-detail-modal" hidden>
+              <div class="trades-detail-card">
+                <button type="button" class="modal-close" id="btn-trades-detail-close"><i class="fa-solid fa-xmark"></i></button>
+                <div id="trades-detail-content"></div>
+                <div class="trades-detail-actions" id="trades-detail-actions"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Create marketplace offer modal -->
+          <div class="modal-overlay" id="mp-create-modal" hidden>
+            <div class="modal mp-create-modal">
+              <div class="modal-header">
+                <h3 data-i18n="mp_create_offer">Create Offer</h3>
+                <button type="button" class="modal-close" id="btn-mp-create-close"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div class="modal-body">
+                <div class="mp-create-price">
+                  <label data-i18n="mp_price_label">Price (coins)</label>
+                  <input type="number" id="mp-create-price" min="1" max="999999" step="1" value="1000">
+                </div>
+                <div class="inventory-grid mp-create-grid" id="mp-create-grid"></div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="btn-mp-create-cancel" data-i18n="btn_cancel">Cancel</button>
+                <button type="button" class="btn-primary" id="btn-mp-create-submit" data-i18n="mp_list_item">List item</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -553,6 +795,10 @@
 
   <script src="js/skin-patterns.js"></script>
   <script src="js/inventory.js"></script>
+  <script src="js/inventory-tabs.js"></script>
+  <script src="js/cases.js"></script>
+  <script src="js/marketplace.js"></script>
+  <script src="js/trades.js"></script>
   <script src="js/friends.js"></script>
   <script src="js/play.js"></script>
   <script src="js/profile.js"></script>

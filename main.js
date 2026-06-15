@@ -1281,12 +1281,254 @@ function postCsrApi(url, body, cookies) {
   });
 }
 
+function postCsrApiRaw(url, rawBody, cookies) {
+  return new Promise((resolve) => {
+    const { net } = require('electron');
+    const request = net.request({ method: 'POST', url });
+
+    request.setHeader('Origin', 'https://csrestored.fun');
+    request.setHeader('Referer', 'https://csrestored.fun/');
+    request.setHeader('Accept', 'application/json');
+    request.setHeader('Content-Type', 'application/json');
+
+    if (cookies.length > 0) {
+      request.setHeader('Cookie', cookies.map(c => `${c.name}=${c.value}`).join('; '));
+    }
+
+    request.on('response', (response) => {
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          const parsed = data ? JSON.parse(data) : null;
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode,
+            data: parsed
+          });
+        } catch (e) {
+          resolve({ ok: false, status: response.statusCode, data: null, raw: data });
+        }
+      });
+    });
+
+    request.on('error', (err) => {
+      resolve({ ok: false, error: err.message, data: null });
+    });
+
+    request.write(typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody || {}));
+    request.end();
+  });
+}
+
+function patchCsrApi(url, body, cookies) {
+  return new Promise((resolve) => {
+    const { net } = require('electron');
+    const request = net.request({ method: 'PATCH', url });
+
+    request.setHeader('Origin', 'https://csrestored.fun');
+    request.setHeader('Referer', 'https://csrestored.fun/');
+    request.setHeader('Accept', 'application/json');
+    request.setHeader('Content-Type', 'application/json');
+
+    if (cookies.length > 0) {
+      request.setHeader('Cookie', cookies.map(c => `${c.name}=${c.value}`).join('; '));
+    }
+
+    const payload = JSON.stringify(body || {});
+
+    request.on('response', (response) => {
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          const parsed = data ? JSON.parse(data) : null;
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode,
+            data: parsed
+          });
+        } catch (e) {
+          resolve({ ok: false, status: response.statusCode, data: null, raw: data });
+        }
+      });
+    });
+
+    request.on('error', (err) => {
+      resolve({ ok: false, error: err.message, data: null });
+    });
+
+    request.write(payload);
+    request.end();
+  });
+}
+
 function makeApiRequest(url, cookies) {
   return fetchCsrApi(url, cookies).then((result) => ({
     error: !result.ok,
     matches: result.ok ? extractApiArray(result.data, ['data', 'matches', 'history', 'results']) : []
   }));
 }
+
+ipcMain.handle('get-csr-marketplace', async () => {
+  try {
+    const cookies = await getCsrCookies();
+    const result = await fetchCsrApi(`${API_BASE_URL}/inventory/marketplace/`, cookies);
+    if (result.status === 401) return { error: true, offers: [], unauthorized: true };
+    if (!result.ok) return { error: true, offers: [], message: `HTTP ${result.status}` };
+    const offers = Array.isArray(result.data)
+      ? result.data
+      : extractApiArray(result.data, ['offers', 'listings', 'items', 'data']);
+    return { error: false, offers };
+  } catch (e) {
+    return { error: true, offers: [], message: e.message };
+  }
+});
+
+ipcMain.handle('post-csr-marketplace-add', async (event, weaponId, price) => {
+  const wid = String(weaponId ?? '').replace(/\D/g, '');
+  const p = Math.min(999999, Math.max(1, parseInt(price, 10) || 0));
+  if (!wid) return { error: true, message: 'Invalid item id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await postCsrApi(`${API_BASE_URL}/inventory/marketplace/add`, { weapon_id: wid, price: p }, cookies);
+    if (!result.ok) {
+      return { error: true, message: result.data?.message || result.data?.error || `HTTP ${result.status}` };
+    }
+    return { error: false, data: result.data };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('get-csr-cases', async () => {
+  try {
+    const cookies = await getCsrCookies();
+    const result = await fetchCsrApi(`${API_BASE_URL}/inventory/cases`, cookies);
+    if (result.status === 401) return { error: true, cases: [], unauthorized: true };
+    if (!result.ok) return { error: true, cases: [], message: `HTTP ${result.status}` };
+    const cases = Array.isArray(result.data)
+      ? result.data
+      : extractApiArray(result.data, ['cases', 'data']);
+    return { error: false, cases };
+  } catch (e) {
+    return { error: true, cases: [], message: e.message };
+  }
+});
+
+ipcMain.handle('post-csr-cases-buy', async (event, caseId) => {
+  const id = String(caseId ?? '').replace(/\D/g, '');
+  if (!id) return { error: true, message: 'Invalid case id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await postCsrApi(`${API_BASE_URL}/inventory/cases/buy/${id}`, {}, cookies);
+    if (!result.ok) {
+      return { error: true, message: result.data?.message || result.data?.error || `HTTP ${result.status}` };
+    }
+    return { error: false, data: result.data };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('get-csr-case-detail', async (event, caseId) => {
+  const id = String(caseId ?? '').replace(/\D/g, '');
+  if (!id) return { error: true, message: 'Invalid case id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await fetchCsrApi(`${API_BASE_URL}/inventory/cases/${id}`, cookies);
+    if (result.status === 401) return { error: true, unauthorized: true };
+    if (!result.ok) return { error: true, message: `HTTP ${result.status}` };
+    return { error: false, data: result.data };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('post-csr-cases-open', async (event, caseId) => {
+  const id = String(caseId ?? '').replace(/\D/g, '');
+  if (!id) return { error: true, message: 'Invalid case id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await postCsrApi(`${API_BASE_URL}/inventory/cases/open/${id}`, {}, cookies);
+    if (!result.ok) {
+      return { error: true, message: result.data?.message || result.data?.error || `HTTP ${result.status}` };
+    }
+    return { error: false, data: result.data };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('post-csr-sell', async (event, weaponId) => {
+  const id = String(weaponId ?? '').replace(/\D/g, '');
+  if (!id) return { error: true, message: 'Invalid weapon id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await postCsrApi(`${API_BASE_URL}/inventory/sell/${id}`, {}, cookies);
+    if (!result.ok) {
+      return { error: true, message: result.data?.message || result.data?.error || `HTTP ${result.status}` };
+    }
+    return { error: false, data: result.data };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('get-csr-trades', async () => {
+  try {
+    const cookies = await getCsrCookies();
+    const result = await fetchCsrApi(`${API_BASE_URL}/api/trades`, cookies);
+    if (result.status === 401) return { error: true, trades: [], unauthorized: true };
+    if (!result.ok) return { error: true, trades: [], message: `HTTP ${result.status}` };
+    const trades = Array.isArray(result.data)
+      ? result.data
+      : extractApiArray(result.data, ['all', 'trades', 'data']);
+    return { error: false, trades };
+  } catch (e) {
+    return { error: true, trades: [], message: e.message };
+  }
+});
+
+ipcMain.handle('post-csr-trades', async (event, rawBody) => {
+  if (!rawBody || typeof rawBody !== 'string') return { error: true, message: 'Invalid body' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await postCsrApiRaw(`${API_BASE_URL}/api/trades`, rawBody, cookies);
+    if (!result.ok) {
+      return { error: true, message: result.data?.message || result.data?.error || `HTTP ${result.status}`, status: result.status };
+    }
+    return { error: false, data: result.data };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('patch-csr-trade-accept', async (event, tradeId) => {
+  const id = String(tradeId ?? '').replace(/\D/g, '');
+  if (!id) return { error: true, message: 'Invalid trade id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await patchCsrApi(`${API_BASE_URL}/api/trades/${id}/accept`, {}, cookies);
+    if (!result.ok) return { error: true, message: result.data?.message || `HTTP ${result.status}` };
+    return { error: false, data: result.data };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
+
+ipcMain.handle('patch-csr-trade-reject', async (event, tradeId) => {
+  const id = String(tradeId ?? '').replace(/\D/g, '');
+  if (!id) return { error: true, message: 'Invalid trade id' };
+  try {
+    const cookies = await getCsrCookies();
+    const result = await patchCsrApi(`${API_BASE_URL}/api/trades/${id}/reject`, {}, cookies);
+    if (!result.ok) return { error: true, message: result.data?.message || `HTTP ${result.status}` };
+    return { error: false, data: result.data };
+  } catch (e) {
+    return { error: true, message: e.message };
+  }
+});
 
 ipcMain.handle('get-csr-leaderboard', async (event, page) => {
   const LEADERBOARD_PAGE_SIZE = 50;

@@ -482,5 +482,13 @@ window.CSRInventory = {
     populateRarityFilterOptions();
   },
   showToolbar: showInventoryToolbar,
-  getItems: () => _items
+  getItems: () => _items,
+  normalizeItem,
+  createCard: createInventoryCard,
+  patternBadge: patternBadgeHtml,
+  getRarityInfo,
+  compareRarity,
+  INVENTORY_RARITY,
+  INVENTORY_PAGE_SIZE,
+  csrImageIdFromItem
 };

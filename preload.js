@@ -29,7 +29,18 @@ contextBridge.exposeInMainWorld('api', {
     }
   },
   inventory: {
-    getCSR: () => ipcRenderer.invoke('get-csr-inventory')
+    getCSR: () => ipcRenderer.invoke('get-csr-inventory'),
+    getMarketplace: () => ipcRenderer.invoke('get-csr-marketplace'),
+    addMarketplaceOffer: (weaponId, price) => ipcRenderer.invoke('post-csr-marketplace-add', weaponId, price),
+    getCases: () => ipcRenderer.invoke('get-csr-cases'),
+    getCaseDetail: (caseId) => ipcRenderer.invoke('get-csr-case-detail', caseId),
+    buyCase: (caseId) => ipcRenderer.invoke('post-csr-cases-buy', caseId),
+    openCase: (caseId) => ipcRenderer.invoke('post-csr-cases-open', caseId),
+    sellWeapon: (weaponId) => ipcRenderer.invoke('post-csr-sell', weaponId),
+    getTrades: () => ipcRenderer.invoke('get-csr-trades'),
+    sendTrade: (rawBody) => ipcRenderer.invoke('post-csr-trades', rawBody),
+    acceptTrade: (tradeId) => ipcRenderer.invoke('patch-csr-trade-accept', tradeId),
+    rejectTrade: (tradeId) => ipcRenderer.invoke('patch-csr-trade-reject', tradeId)
   },
   dialog: {
     browseFolder: () => ipcRenderer.invoke('browse-folder'),

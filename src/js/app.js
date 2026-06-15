@@ -55,6 +55,10 @@ async function init() {
     setupGameLaunch();
     setupInventory();
     setupAuth();
+    if (window.CSRInventoryTabs) CSRInventoryTabs.setup();
+    if (window.CSRCases) CSRCases.setup();
+    if (window.CSRMarketplace) CSRMarketplace.setup();
+    if (window.CSRTrades) CSRTrades.setup();
     if (window.CSRInventory) CSRInventory.setupToolbar();
     if (window.CSRFriends) CSRFriends.setup();
     if (window.CSRPlayStats) CSRPlayStats.setup();
@@ -311,7 +315,8 @@ function navigateToPage(page, options = {}) {
   }
 
   if (page === 'inventory') {
-    loadInventory();
+    if (window.CSRInventoryTabs) CSRInventoryTabs.refreshCurrent();
+    else loadInventorySkins();
   } else if (page === 'leaderboard' && window.CSRPlayStats) {
     CSRPlayStats.loadLeaderboard();
   } else if (page === 'history' && window.CSRPlayStats) {
@@ -352,6 +357,7 @@ function clearInventoryViewMode() {
   if (title && typeof t === 'function') {
     title.textContent = t('page_inventory_title');
   }
+  if (window.CSRInventoryTabs) CSRInventoryTabs.onViewModeChange(false);
 }
 
 function openPlayerInventory(userId, userName, returnProfileId) {
@@ -501,7 +507,10 @@ function setupGameLaunch() {
 
 function setupInventory() {
   if (elements.btnRefreshInventory) {
-    elements.btnRefreshInventory.addEventListener('click', () => loadInventory());
+    elements.btnRefreshInventory.addEventListener('click', () => {
+      if (window.CSRInventoryTabs) CSRInventoryTabs.refreshCurrent();
+      else loadInventorySkins();
+    });
   }
   const backBtn = id('btn-inventory-view-back');
   if (backBtn && !backBtn.dataset.bound) {
@@ -531,6 +540,7 @@ function setupAuth() {
       if (result.success) {
         updateAuthUI(null);
         if (window.CSRPlayStats) CSRPlayStats.invalidate();
+        if (window.CSRCases) CSRCases.invalidate();
       }
     });
   }
@@ -579,7 +589,7 @@ function updateAuthUI(user) {
   }
 }
 
-async function loadInventory() {
+async function loadInventorySkins() {
   if (!elements.inventoryGrid || !elements.inventoryCount) return;
 
   const loadGen = ++_inventoryLoadGen;
@@ -599,6 +609,7 @@ async function loadInventory() {
   if (window.CSRInventory) CSRInventory.showToolbar(false);
 
   if (viewUserId) {
+    if (window.CSRInventoryTabs) CSRInventoryTabs.onViewModeChange(true);
     if (banner) banner.hidden = false;
     const label = id('inventory-view-label');
     if (label) {
@@ -835,7 +846,10 @@ function setupIPCListeners() {
   window.api.auth.onStatusChange((data) => {
     if (data.loggedIn) {
       checkAuthStatus();
-      if (state.currentPage === 'inventory') loadInventory();
+      if (state.currentPage === 'inventory') {
+        if (window.CSRInventoryTabs) CSRInventoryTabs.refreshCurrent();
+        else loadInventorySkins();
+      }
     } else {
       updateAuthUI(null);
     }
@@ -853,5 +867,7 @@ window.CSRApp = {
   openProfile,
   openPlayerInventory,
   goBack,
-  getNavBackPage: () => state.navBackPage || 'leaderboard'
+  getNavBackPage: () => state.navBackPage || 'leaderboard',
+  getInventoryViewUserId: () => state.inventoryViewUserId,
+  loadInventorySkins
 };
