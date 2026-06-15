@@ -336,8 +336,7 @@
     if (_spinning) return;
     _activeCase = null;
     _detailItems = [];
-    hideReveal();
-    hideSpinStage();
+    dismissOverlays();
     el('cases-shop-view')?.removeAttribute('hidden');
     el('cases-detail-view')?.setAttribute('hidden', '');
     el('cases-toolbar')?.removeAttribute('hidden');
@@ -577,6 +576,13 @@
     return new Promise((r) => setTimeout(r, ms));
   }
 
+  function dismissOverlays() {
+    hideReveal();
+    hideSpinStage();
+    _spinning = false;
+    syncActionButtons();
+  }
+
   function hideReveal() {
     const ov = el('case-reveal');
     if (ov) ov.hidden = true;
@@ -586,6 +592,7 @@
   }
 
   function showReveal(drop, landCard) {
+    if (!drop && !landCard) return;
     const special = drop ? isSpecialDrop(drop) : !!landCard?.special;
     const r = special ? 7 : Number(drop?.rarity ?? landCard?.rarity) || 0;
     const rInfo = getRarityInfo(r);
@@ -784,6 +791,7 @@
   }
 
   async function load(force) {
+    dismissOverlays();
     if (_loaded && !force) {
       showShopView();
       renderGrid();
@@ -820,6 +828,7 @@
   function setup() {
     if (_bound) return;
     _bound = true;
+    dismissOverlays();
 
     el('btn-case-back')?.addEventListener('click', () => {
       if (_spinning) {
@@ -832,7 +841,14 @@
     el('btn-case-buy')?.addEventListener('click', buyCase);
     el('btn-case-open')?.addEventListener('click', () => spinCase(false));
     el('btn-case-quick-open')?.addEventListener('click', () => spinCase(true));
-    el('btn-case-reveal-close')?.addEventListener('click', hideReveal);
+    el('btn-case-reveal-close')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideReveal();
+    });
+    el('case-reveal')?.addEventListener('click', (e) => {
+      if (e.target === el('case-reveal')) hideReveal();
+    });
+    el('case-reveal-card')?.addEventListener('click', (e) => e.stopPropagation());
     el('btn-case-reveal-again')?.addEventListener('click', () => {
       hideReveal();
       spinCase(_lastQuick);
@@ -850,11 +866,20 @@
       _kind = e.target.value || 'all';
       renderGrid();
     });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const reveal = el('case-reveal');
+      const spin = el('case-spin-stage');
+      if (reveal && !reveal.hidden) hideReveal();
+      else if (spin && !spin.hidden && _activeSkip) triggerSkip();
+    });
   }
 
   window.CSRCases = {
     setup,
     load,
+    dismissOverlays,
     invalidate: () => {
       _loaded = false;
       _cases = [];

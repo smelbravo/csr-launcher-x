@@ -86,6 +86,9 @@
       if (tab) loadTab(tab);
       return;
     }
+    if (_tab === 'cases' && tab !== 'cases' && window.CSRCases?.dismissOverlays) {
+      CSRCases.dismissOverlays();
+    }
     _tab = tab;
     showPanel(tab);
     loadTab(tab);
