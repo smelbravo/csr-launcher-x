@@ -40,14 +40,17 @@
     });
 
     const controls = el('inventory-controls-bar');
-    const showControls = tab === 'skins' || tab === 'cases';
+    const coinTabs = ['skins', 'cases', 'marketplace', 'trades'];
+    const showCoins = coinTabs.includes(tab);
     if (controls) {
-      controls.style.display = showControls ? '' : 'none';
+      controls.style.display = showCoins ? '' : 'none';
     }
     const refreshBtn = el('btn-refresh-inventory');
     const countEl = el('inventory-count');
+    const coinsWrap = el('inventory-coins-wrap');
     if (refreshBtn) refreshBtn.style.display = tab === 'skins' ? '' : 'none';
     if (countEl) countEl.style.display = tab === 'skins' ? '' : 'none';
+    if (coinsWrap) coinsWrap.style.display = showCoins ? '' : 'none';
 
     const titleEl = el('page-inventory-title');
     if (titleEl && !isViewingOther()) {

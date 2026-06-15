@@ -258,15 +258,6 @@
   }
 
   function renderBalance() {
-    const wrap = el('cases-balance');
-    const val = el('cases-balance-value');
-    if (!wrap || !val) return;
-    if (_coins == null) {
-      wrap.hidden = true;
-      return;
-    }
-    wrap.hidden = false;
-    val.textContent = formatCoins(_coins);
     if (typeof updateInventoryCoinsDisplay === 'function') updateInventoryCoinsDisplay(_coins);
   }
 

@@ -385,6 +385,7 @@
     switchSide('me');
     loadMyInventory().then(() => { buildCatChips(); renderItemGrid(); updateSummary(); });
     loadTheirInventory(f.id);
+    if (typeof syncTradesCoinsPillVisible === 'function') syncTradesCoinsPillVisible(true);
   }
 
   function showView(view) {
@@ -395,8 +396,10 @@
     if (view === 'create') {
       el('trades-step-friend').hidden = false;
       el('trades-step-compose').hidden = true;
+      if (typeof syncTradesCoinsPillVisible === 'function') syncTradesCoinsPillVisible(false);
       loadFriends();
     } else {
+      if (typeof syncTradesCoinsPillVisible === 'function') syncTradesCoinsPillVisible(false);
       load(true);
     }
   }
@@ -479,7 +482,11 @@
     document.querySelectorAll('.trades-subtab').forEach((b) => b.addEventListener('click', () => showView(b.dataset.tradesView)));
     document.querySelectorAll('.trades-filter').forEach((b) => b.addEventListener('click', () => { _filter = b.dataset.tradesFilter; document.querySelectorAll('.trades-filter').forEach((x) => x.classList.toggle('active', x === b)); renderTradeList(); }));
     document.querySelectorAll('.trades-side-tab').forEach((b) => b.addEventListener('click', () => switchSide(b.dataset.tradeSide)));
-    el('btn-trades-change-friend')?.addEventListener('click', () => { el('trades-step-compose').hidden = true; el('trades-step-friend').hidden = false; });
+    el('btn-trades-change-friend')?.addEventListener('click', () => {
+      el('trades-step-compose').hidden = true;
+      el('trades-step-friend').hidden = false;
+      if (typeof syncTradesCoinsPillVisible === 'function') syncTradesCoinsPillVisible(false);
+    });
     el('btn-trades-submit')?.addEventListener('click', sendTrade);
     el('btn-trades-detail-close')?.addEventListener('click', () => { el('trades-detail-modal').hidden = true; });
     el('trades-item-search')?.addEventListener('input', () => { state[state.activeSide].q = el('trades-item-search').value.trim().toLowerCase(); renderItemGrid(); });

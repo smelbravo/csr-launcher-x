@@ -684,40 +684,36 @@ body {
   flex-wrap: wrap;
 }
 
-.inventory-coins-wrap {
-  display: flex;
+.inventory-coins-wrap,
+.coins-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   margin-left: auto;
-}
-
-.inventory-coins-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #facc15;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.2);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.inventory-coins-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.coins-pill i {
+  font-size: 0.875rem;
+  color: #facc15;
 }
 
-.inventory-coins-icon {
-  font-size: 1rem;
-  color: #fbbf24;
+.coins-pill-inline {
+  margin-left: 0;
+  flex-shrink: 0;
 }
 
-.inventory-coins-value {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: #fbbf24;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-
-.inventory-coins-wrap[hidden] {
-  display: none;
+.inventory-coins-wrap[hidden],
+.coins-pill[hidden] {
+  display: none !important;
 }
 
 .inventory-toolbar {
@@ -3478,19 +3474,6 @@ body {
   margin-left: auto;
 }
 
-.cases-balance {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #facc15;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(250, 204, 21, 0.08);
-  border: 1px solid rgba(250, 204, 21, 0.2);
-}
-
 .cases-msg {
   margin-bottom: 12px;
   padding: 10px 14px;
@@ -4111,11 +4094,17 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   padding: 10px 14px;
   margin-bottom: 12px;
   border-radius: 10px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
+}
+
+.trades-partner-bar .coins-pill-inline {
+  margin-left: auto;
+  margin-right: 4px;
 }
 
 .trades-side-tabs {

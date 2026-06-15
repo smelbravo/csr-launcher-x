@@ -237,12 +237,9 @@
               <span data-i18n="btn_refresh"></span>
             </button>
             <span class="inventory-count" id="inventory-count"></span>
-            <div class="inventory-coins-wrap" id="inventory-coins-wrap" hidden>
-              <span class="inventory-coins-label" data-i18n="inventory_your_coins">Your coins</span>
-              <span class="inventory-coins-badge">
-                <i class="fa-solid fa-coins inventory-coins-icon" aria-hidden="true"></i>
-                <span class="inventory-coins-value" id="inventory-coins-value"></span>
-              </span>
+            <div class="coins-pill" id="inventory-coins-wrap" hidden data-i18n-title="inventory_your_coins">
+              <i class="fa-solid fa-coins" aria-hidden="true"></i>
+              <span id="inventory-coins-value"></span>
             </div>
           </div>
 
@@ -333,10 +330,6 @@
                 <option value="name" data-i18n="cases_sort_name">Name</option>
               </select>
               <span class="cases-count" id="cases-count"></span>
-              <span class="cases-balance" id="cases-balance" hidden>
-                <i class="fa-solid fa-coins" aria-hidden="true"></i>
-                <span id="cases-balance-value"></span>
-              </span>
             </div>
             <div class="cases-msg" id="cases-msg" hidden></div>
             <div class="inv-panel-loading" id="cases-loading" style="display: none;">
@@ -488,6 +481,10 @@
                   <div class="trades-partner-info">
                     <img class="trades-partner-avatar" id="trades-partner-avatar" alt="" hidden>
                     <span id="trades-partner-name"></span>
+                  </div>
+                  <div class="coins-pill coins-pill-inline" id="trades-coins-pill" hidden>
+                    <i class="fa-solid fa-coins" aria-hidden="true"></i>
+                    <span id="trades-coins-value"></span>
                   </div>
                   <button type="button" class="btn-secondary btn-sm" id="btn-trades-change-friend" data-i18n="trades_change_friend">Change friend</button>
                 </div>

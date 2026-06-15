@@ -124,19 +124,44 @@ function formatLocaleNumber(value) {
 }
 
 let _displayedCoins = null;
+let _tradesComposeVisible = false;
+let _coinsBarForceHidden = false;
+
+function syncCoinsPillVisibility() {
+  const wrap = id('inventory-coins-wrap');
+  const valueEl = id('inventory-coins-value');
+  const tradesWrap = id('trades-coins-pill');
+  const tradesVal = id('trades-coins-value');
+  const hasCoins = _displayedCoins != null;
+  const text = hasCoins ? formatLocaleNumber(_displayedCoins) : '';
+
+  if (wrap && valueEl) {
+    if (!hasCoins || _coinsBarForceHidden || _tradesComposeVisible) wrap.hidden = true;
+    else {
+      wrap.hidden = false;
+      valueEl.textContent = text;
+    }
+  }
+  if (tradesWrap && tradesVal) {
+    if (!hasCoins || !_tradesComposeVisible) tradesWrap.hidden = true;
+    else {
+      tradesWrap.hidden = false;
+      tradesVal.textContent = text;
+    }
+  }
+}
 
 function updateInventoryCoinsDisplay(coins) {
   _displayedCoins = coins;
-  const wrap = id('inventory-coins-wrap');
-  const valueEl = id('inventory-coins-value');
-  if (!wrap || !valueEl) return;
-  if (coins == null) {
-    wrap.hidden = true;
-    return;
-  }
-  wrap.hidden = false;
-  valueEl.textContent = formatLocaleNumber(coins);
+  syncCoinsPillVisibility();
 }
+
+function syncTradesCoinsPillVisible(show) {
+  _tradesComposeVisible = !!show;
+  syncCoinsPillVisibility();
+}
+
+window.syncTradesCoinsPillVisible = syncTradesCoinsPillVisible;
 
 function applyTranslations() {
   window._invTranslate = t;
@@ -618,7 +643,10 @@ async function loadInventorySkins() {
     if (titleEl) {
       titleEl.textContent = tf('profile_inventory_of', { name: state.inventoryViewUserName || viewUserId });
     }
-    if (coinsWrap) coinsWrap.hidden = true;
+    if (coinsWrap) {
+      _coinsBarForceHidden = true;
+      syncCoinsPillVisibility();
+    }
 
     try {
       const result = await window.api.csr.getUserInventory(viewUserId);
@@ -679,7 +707,7 @@ async function loadInventorySkins() {
 
   if (banner) banner.hidden = true;
   if (titleEl) titleEl.textContent = t('page_inventory_title');
-  if (coinsWrap) coinsWrap.hidden = false;
+  _coinsBarForceHidden = false;
 
   try {
     const result = await window.api.inventory.getCSR();
